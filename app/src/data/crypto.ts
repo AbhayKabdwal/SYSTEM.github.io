@@ -178,3 +178,18 @@ export async function open<T>(key: CryptoKey, sealed: Sealed): Promise<T> {
   const pt = await subtle().decrypt({ name: GCM, iv: fromB64(sealed.iv) }, key, fromB64(sealed.ciphertext));
   return JSON.parse(dec.decode(pt)) as T;
 }
+
+/** Binary payloads (photos): 12-byte IV followed by the ciphertext. */
+export async function sealBytes(key: CryptoKey, data: ArrayBuffer): Promise<Uint8Array> {
+  const iv = random(12);
+  const ct = new Uint8Array(await subtle().encrypt({ name: GCM, iv }, key, data));
+  const out = new Uint8Array(iv.length + ct.length);
+  out.set(iv);
+  out.set(ct, iv.length);
+  return out;
+}
+
+export async function openBytes(key: CryptoKey, sealed: ArrayBuffer | Uint8Array): Promise<ArrayBuffer> {
+  const bytes = sealed instanceof Uint8Array ? sealed : new Uint8Array(sealed);
+  return subtle().decrypt({ name: GCM, iv: bytes.slice(0, 12) }, key, bytes.slice(12));
+}

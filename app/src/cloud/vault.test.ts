@@ -6,9 +6,9 @@ const snap = (over: Partial<Snapshot['data']>, stamps: Snapshot['stamps'] = {}):
   toSnapshot({ player: { name: 'A' }, templates: DEFAULT_TEMPLATES, questPool: DEFAULT_QUEST_POOL, logs: {}, ...over }, stamps);
 
 describe('snapshots', () => {
-  it('never includes photos', () => {
+  it('keeps photo ids but never inline photo data', () => {
     const s = snap({ logs: { d: { photoIds: ['p1'], photos: ['data:image/jpeg;base64,AA'], savedAt: '1' } } });
-    expect(JSON.stringify(s)).not.toContain('p1');
+    expect(JSON.stringify(s)).toContain('p1');
     expect(JSON.stringify(s)).not.toContain('data:image');
   });
 
@@ -31,6 +31,11 @@ describe('snapshots', () => {
   it('puts local photo ids back after a merge', () => {
     const merged = withLocalPhotos({ player: null, templates: [], questPool: [], logs: { a: { savedAt: '2' } } }, { a: { photoIds: ['p1'] } });
     expect(merged.logs.a?.photoIds).toEqual(['p1']);
+  });
+
+  it('prefers the synced photo ids when the merged log has them', () => {
+    const merged = withLocalPhotos({ player: null, templates: [], questPool: [], logs: { a: { savedAt: '2', photoIds: ['p2'] } } }, { a: { photoIds: ['p1'] } });
+    expect(merged.logs.a?.photoIds).toEqual(['p2']);
   });
 
   it('stableStringify ignores key order and undefined', () => {

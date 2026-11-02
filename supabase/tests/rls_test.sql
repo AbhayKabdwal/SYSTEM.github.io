@@ -1,7 +1,7 @@
 -- Row-level security checks. Run with: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(25);
 
 -- Three users via the sign-up trigger.
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -71,11 +71,18 @@ select throws_ok(
   null, 'stats must be well-formed');
 update public.profiles set stats = '{"level": 5, "rank": "E", "streak": 3, "weekExp": 420, "week": "2026-11-02"}' where id = '00000000-0000-0000-0000-00000000000c';
 
+insert into storage.objects (bucket_id, name, owner)
+values ('vault-media', '00000000-0000-0000-0000-00000000000c/p1.bin', '00000000-0000-0000-0000-00000000000c');
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('vault-media', '00000000-0000-0000-0000-00000000000a/p2.bin') $$,
+  null, 'cannot write into someone else''s private photo folder');
+
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
 select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 0, 'non-follower cannot read a followers-only photo');
 insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c');
 select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 1, 'follower can read the photo');
 select is((select (stats ->> 'weekExp')::int from public.profiles where handle = 'carol'), 420, 'shared stats are visible');
+select is((select count(*)::int from storage.objects where bucket_id = 'vault-media'), 0, 'private photos stay private, even to followers');
 
 -- Anonymous visitors see nothing.
 select set_config('role', 'anon', true);

@@ -4,7 +4,7 @@ import { open, seal, type VaultKeyRecord } from '../data/crypto';
 import type { Logs } from '../domain';
 import { requireClient } from './client';
 
-/** What gets encrypted and synced. Photos are deliberately excluded. */
+/** What gets encrypted and synced. Photo files travel separately (media.ts); logs keep their ids. */
 export interface Snapshot {
   v: 1;
   data: AppData;
@@ -14,8 +14,8 @@ export interface Snapshot {
 export function toSnapshot(data: AppData, stamps: MetaStamps): Snapshot {
   const logs: Logs = {};
   for (const [d, l] of Object.entries(data.logs)) {
-    // Photo ids point into this device's photo store; they mean nothing elsewhere.
-    const { photoIds: _photoIds, photos: _photos, ...rest } = l;
+    // v1 inline data-URL photos are never synced; photo files go through encrypted media sync.
+    const { photos: _photos, ...rest } = l;
     logs[d] = rest;
   }
   return { v: 1, data: { ...data, logs }, stamps };
@@ -39,11 +39,12 @@ export function mergeSnapshots(local: Snapshot, remote: Snapshot): Snapshot {
   return { v: 1, data, stamps };
 }
 
+/** Snapshots from older app versions had no photo ids; keep this device's ids rather than lose them. */
 export function withLocalPhotos(merged: AppData, localLogs: Logs): AppData {
   const logs: Logs = {};
   for (const [d, l] of Object.entries(merged.logs)) {
     const ids = localLogs[d]?.photoIds;
-    logs[d] = ids ? { ...l, photoIds: ids } : l;
+    logs[d] = ids && !l.photoIds ? { ...l, photoIds: ids } : l;
   }
   return { ...merged, logs };
 }

@@ -27,7 +27,7 @@ import { compressImage } from '../../ui/image';
 import { timeAgo, useLedger, usePhotoUrl, useToday } from '../../ui/hooks';
 import { toast } from '../../ui/notify';
 
-type Tab = 'following' | 'explore' | 'ranks' | 'search';
+type Tab = 'following' | 'explore' | 'ranks';
 
 const repo = createRepo();
 const JOURNAL_KEY = 'journal';
@@ -88,6 +88,7 @@ export function HuntersPage() {
         </Card>
       ) : (
         <>
+          <Search />
           <Seg
             label="Feed"
             value={tab}
@@ -96,10 +97,9 @@ export function HuntersPage() {
               { value: 'following', label: 'FOLLOWING' },
               { value: 'explore', label: 'GLOBAL' },
               { value: 'ranks', label: 'RANKS' },
-              { value: 'search', label: 'FIND' },
             ]}
           />
-          {tab === 'search' ? <Search /> : tab === 'ranks' ? <Leaderboard /> : <FeedList key={`${tab}-${reload}`} scopeKind={tab} />}
+          {tab === 'ranks' ? <Leaderboard /> : <FeedList key={`${tab}-${reload}`} scopeKind={tab} />}
         </>
       )}
       {composing && (
@@ -543,15 +543,31 @@ function Search() {
 
   return (
     <Card>
-      <Field label="SEARCH BY HANDLE">
-        {(id) => <input id={id} className="inp" autoCapitalize="none" autoCorrect="off" placeholder="jinwoo" value={q} onChange={(e) => setQ(e.target.value)} />}
+      <Field label="FIND HUNTERS">
+        {(id) => (
+          <input
+            id={id}
+            className="inp"
+            type="search"
+            autoCapitalize="none"
+            autoCorrect="off"
+            placeholder="Search by username or name"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        )}
       </Field>
       {results.map((p) => (
         <Link key={p.id} to={`/u/${p.handle}`} className="list-item">
-          <div>
+          <div style={{ flex: 1 }}>
             <div className="list-title">{p.display_name}</div>
             <div className="list-sub">@{p.handle}</div>
           </div>
+          {p.stats && (
+            <span className="rank-badge-sm" style={{ color: RANK_GATES.find((g) => g.rank === p.stats!.rank)?.color }}>
+              {p.stats.rank}
+            </span>
+          )}
         </Link>
       ))}
       {q.trim() && !results.length && !error && <p className="hint">No hunters found.</p>}

@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '../cloud/client';
 import { fetchKeyRecord, saveKeyRecord, syncVault, toSnapshot, withLocalPhotos } from '../cloud/vault';
 import { myProfile, type Profile } from '../cloud/social';
+import { syncPhotos } from '../cloud/media';
 import {
   createVaultKeys,
   rewrapWithPassphrase,
@@ -42,6 +43,8 @@ interface SessionState {
   sync: SyncStatus;
   lastSyncedAt: string | null;
   syncError: string | null;
+  /** Bumped when synced photos arrive, so open images re-read the photo store. */
+  photoRev: number;
   /** Set after a password-reset email link; the UI must ask for a new password. */
   passwordRecovery: boolean;
   start(): void;
@@ -119,6 +122,7 @@ export const useSession = create<SessionState>((set, get) => {
     sync: 'idle',
     lastSyncedAt: null,
     syncError: null,
+    photoRev: 0,
     passwordRecovery: false,
 
     start() {
@@ -222,6 +226,9 @@ export const useSession = create<SessionState>((set, get) => {
             clearTimeout(syncTimer);
             syncTimer = setTimeout(() => void get().syncNow(), SYNC_DEBOUNCE_MS);
           }
+          // Photos after logs: the vault now lists every photo any device references.
+          const arrived = await syncPhotos(id, deviceKey!, useApp.getState().logs, repo);
+          if (arrived) set((st) => ({ photoRev: st.photoRev + 1 }));
           set({ sync: 'idle', lastSyncedAt: new Date().toISOString() });
         } catch (e) {
           set({ sync: 'error', syncError: (e as Error).message });

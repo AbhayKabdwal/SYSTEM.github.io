@@ -427,7 +427,7 @@ export function QuestPage() {
         </div>
 
         <div className="label" style={{ marginTop: 14 }}>
-          PROGRESS PHOTOS · STAY ON THIS DEVICE
+          PROGRESS PHOTOS · PRIVATE, ENCRYPTED BACKUP WITH SYNC
         </div>
         <div className="photo-grid">
           {PHOTO_LABELS.map((lbl, i) => (
@@ -595,7 +595,7 @@ function TaskRow({ task, value, onChange }: { task: Quest['tasks'][number]; valu
   );
 }
 
-const VIS_LABEL: Record<Visibility, string> = { private: 'Only you, on this device', followers: 'Your followers', public: 'Everyone on Hunters' };
+const VIS_LABEL: Record<Visibility, string> = { private: 'Only you', followers: 'Your followers', public: 'Everyone on Hunters' };
 
 function ProofCard(props: {
   isToday: boolean;
@@ -656,7 +656,9 @@ function ProofCard(props: {
           />
           <p className="hint" style={{ marginTop: -6 }}>
             {VIS_LABEL[props.visibility]}.{' '}
-            {props.visibility !== 'private' && !props.canShare ? 'Sign in to share; until then it stays private.' : props.visibility !== 'private' ? 'Posted to Hunters with your quest.' : 'Never uploaded.'}
+            {props.visibility !== 'private' && !props.canShare ? 'Sign in to share; until then it stays private.' : props.visibility !== 'private'
+                ? 'Posted to Hunters with your quest, and kept in your archive.'
+                : 'Kept in your archive. With sync on it is backed up encrypted, so only you can ever open it.'}
           </p>
           <button className="btn btn-grn" style={{ marginTop: 8 }} disabled={!props.cleared || props.busy} onClick={() => input.current?.click()}>
             {props.busy ? 'UPLOADING…' : props.cleared ? '📷 ATTACH PROOF' : 'CLEAR ALL TASKS FIRST'}

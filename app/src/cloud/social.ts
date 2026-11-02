@@ -60,12 +60,18 @@ export async function profileByHandle(handle: string): Promise<Profile | null> {
   return data;
 }
 
+/** Username (handle) or display name, anywhere in the text. Exact and prefix handle matches first. */
 export async function searchProfiles(q: string): Promise<Profile[]> {
-  const term = q.trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
-  if (!term) return [];
-  const { data, error } = await requireClient().from('profiles').select(PROFILE_COLS).ilike('handle', `${term}%`).limit(20);
+  const raw = q.trim().replace(/^@/, '');
+  const handle = raw.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  // Letters, digits, spaces only: commas and brackets would break the filter syntax.
+  const name = raw.replace(/[^\p{L}\p{N} _]/gu, '').trim();
+  if (!handle && !name) return [];
+  const filters = [handle && `handle.ilike.*${handle}*`, name && `display_name.ilike.*${name}*`].filter(Boolean).join(',');
+  const { data, error } = await requireClient().from('profiles').select(PROFILE_COLS).or(filters).limit(30);
   if (error) throw error;
-  return data ?? [];
+  const score = (p: Profile) => (p.handle === handle ? 0 : p.handle.startsWith(handle) ? 1 : 2);
+  return ((data ?? []) as Profile[]).sort((a, b) => score(a) - score(b) || a.handle.localeCompare(b.handle));
 }
 
 export async function followCounts(userId: string) {

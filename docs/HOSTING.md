@@ -55,11 +55,7 @@ Every later push to `main` redeploys. Pull requests run the checks without deplo
 
 You need Node 20+ locally for the Supabase CLI.
 
-```bash
-npx supabase init
-```
-
-Answer **N** to the editor-settings prompts. This creates `supabase/config.toml` next to the existing `migrations/` folder. Then:
+`supabase/config.toml` is already in the repo, with the live site's auth URLs, a 10-character minimum password and email confirmation on.
 
 ```bash
 npx supabase login
@@ -70,42 +66,38 @@ npx supabase link --project-ref YOUR_PROJECT_REF
 ```
 
 ```bash
-npx supabase db push
+npx supabase db push --remote
 ```
 
-The project ref is the `xxxx` in `https://xxxx.supabase.co`. `db push` applies every file in `supabase/migrations/` in order:
+```bash
+npx supabase config push
+```
+
+The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supabase.co`. Recent CLI versions target a local database unless you pass `--remote`. `config push` copies the auth settings from `config.toml` to the project. `db push` applies every file in `supabase/migrations/` in order:
 
 - `20261102000000_init.sql`: profiles, encrypted vaults, follows, feats, likes, blocks, reports.
 - `20261103000000_media_and_stats.sql`: the private `feat-media` storage bucket for Followers/Global photos (1 MB limit, JPEG/WebP only) and opt-in leaderboard stats.
+- `20261104000000_private_media.sql`: the owner-only `vault-media` bucket for encrypted backups of Private photos.
+
+**"Connection timed out" on `db push`?** Your network blocks the database ports (5432/6543), which is common on campus and office networks. The direct database address is also IPv6-only. Switch to a phone hotspot and rerun. `config push` and the website use HTTPS, so they aren't affected.
 
 **No CLI?** Open the dashboard → **SQL Editor**, paste each migration file in order and run it once.
 
 ### 3. Test the security rules (recommended)
 
-`supabase/tests/rls_test.sql` checks the rules that protect user data: vaults are private, followers-only feats stay hidden, blocks work, and anonymous visitors see nothing. Running it locally needs Docker:
+`supabase/tests/rls_test.sql` checks the rules that protect user data: vaults are private, followers-only feats stay hidden, blocks work, and anonymous visitors see nothing. Run them against your project. They run inside a transaction that is rolled back, so they leave nothing behind:
 
 ```bash
-npx supabase start
+npx supabase test db --remote
 ```
 
-```bash
-npx supabase test db
-```
-
-All 23 checks should pass. Stop the local stack with `npx supabase stop`.
+All 25 checks should pass.
 
 ### 4. Configure auth
 
 Dashboard → **Authentication**:
 
-- **URL Configuration**
-  - *Site URL:* `https://abhaykabdwal.github.io/SYSTEM.github.io/`
-  - *Redirect URLs:* add `https://abhaykabdwal.github.io/SYSTEM.github.io/` and `http://localhost:5173/`.
-
-  Confirmation and password-reset links only work for URLs on this list.
-- **Sign In / Providers → Email**
-  - Keep *Confirm email* **on**.
-  - Set *Minimum password length* to **10**. This matches the app's own check, so the server enforces it too.
+- **URL configuration, email confirmation, password length:** already set by `npx supabase config push`. Check under **URL Configuration** that the Site URL is `https://abhaykabdwal.github.io/SYSTEM.github.io/`.
 - **Emails → SMTP Settings:** Supabase's built-in email sender is for testing only. It is heavily rate-limited and only delivers to your project team's addresses. Before inviting anyone else, connect a real SMTP provider (Resend, Brevo, Postmark, AWS SES…). Otherwise other people's sign-up and reset emails will never arrive.
 
 ### 5. Connect the frontend
@@ -177,7 +169,7 @@ NODE_OPTIONS=--experimental-global-webcrypto npm run build
 |---|---|
 | Site shows the README | Pages source is still "Deploy from a branch". Switch it to GitHub Actions. |
 | Workflow fails at "deploy" | Same cause, or the `github-pages` environment has branch protection that excludes `main`. |
-| No Account / Hunters in the app | The repo variables are missing or misspelled. Re-run the workflow after adding them. |
+| Account page says the build runs fully offline | The repo variables are missing or misspelled. The values are baked in at build time, so run the workflow again after adding them, then reopen the app. |
 | Confirmation email never arrives | Custom SMTP isn't set up (see Part 2, step 4). |
 | "redirect URL not allowed" after clicking an email link | Add the exact site URL, with the trailing slash, to Redirect URLs. |
 | Sync says "Network error" | The Supabase project may be paused. Restore it in the dashboard. |

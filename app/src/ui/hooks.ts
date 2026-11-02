@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { computeLedger, questForDate, todayStr, type Ledger, type Quest, type Tier } from '../domain';
 import { useApp } from '../state/store';
+import { useSession } from '../state/session';
 import { createRepo } from '../data/repo';
 
 /** Today's local date, refreshed when the day rolls over or the app is reopened. */
@@ -57,6 +58,8 @@ const repo = createRepo();
 /** Object URL for a stored photo; revoked on unmount. */
 export function usePhotoUrl(id: string | null | undefined) {
   const [url, setUrl] = useState<string | null>(null);
+  // Re-read when synced photos arrive from another device.
+  const photoRev = useSession((s) => s.photoRev);
   useEffect(() => {
     if (!id) {
       setUrl(null);
@@ -73,7 +76,7 @@ export function usePhotoUrl(id: string | null | undefined) {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [id]);
+  }, [id, photoRev]);
   return url;
 }
 
