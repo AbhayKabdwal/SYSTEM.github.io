@@ -1,0 +1,24 @@
+/* Colour tokens carried over from v1. Fonts are system stacks until Phase 1
+   self-hosts Orbitron/Rajdhani (no third-party font requests). */
+:root {
+  --bg: #040a14;
+  --card: rgba(255, 255, 255, 0.03);
+  --border: rgba(0, 200, 255, 0.15);
+  --glow: #00c8ff;
+  --bright: #dceeff;
+  --text: #9ab8d0;
+  --dim: #3a5870;
+  --red: #ff4060;
+  font-family: system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+body { margin: 0; background: var(--bg); }
+.shell { max-width: 480px; margin: 0 auto; padding: 16px; }
+h1 { color: var(--glow); letter-spacing: 4px; margin: 8px 0 0; }
+h2 { color: var(--bright); font-size: 13px; letter-spacing: 2px; margin: 0 0 8px; }
+.dim { color: var(--dim); }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-top: 12px; }
+.card.penalty { border-color: var(--red); }
+.row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid rgba(0, 200, 255, 0.06); }
+.row strong { color: var(--bright); text-align: right; }
