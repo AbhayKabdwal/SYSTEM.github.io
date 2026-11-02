@@ -1,8 +1,9 @@
 import { SKILL_TREES } from './defaults';
-import { getRank, getStreak, getMonthly, countCleared } from './progress';
-import { EXP_PER_RANK_POINT, totalExp } from './exp';
+import { getMonthly } from './progress';
+import { flameFor, type Ledger } from './ledger';
 import { getSkillState } from './skills';
 import type { DateStr, Logs, Template } from './types';
+import { isComplete } from './completion';
 
 export type AchievementKind = 'rank' | 'streak' | 'skill' | 'monthly' | 'milestone' | 'quest';
 
@@ -14,29 +15,42 @@ export interface Achievement {
   detail: string;
 }
 
-const STREAK_MARKS = [3, 7, 14, 30, 60, 100, 200, 365];
+const STREAK_MARKS = [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
 const CLEARED_MARKS = [1, 10, 25, 50, 100, 200, 365, 500, 1000];
 
-export function achievements(logs: Logs, templates: Template[], today: DateStr): Achievement[] {
+export function achievements(ledger: Ledger, logs: Logs, templates: Template[], today: DateStr): Achievement[] {
   const out: Achievement[] = [];
-  const rank = getRank(totalExp(logs, templates) / EXP_PER_RANK_POINT);
   out.push({
     kind: 'rank',
-    key: `rank:${rank.level}`,
-    title: `Reached ${rank.rank}-Rank`,
-    detail: `LVL ${rank.level} — ${rank.title}`,
+    key: `rank:${ledger.rank}:${ledger.level}`,
+    title: `${ledger.rank}-Rank · Level ${ledger.level}`,
+    detail: `${ledger.title.title} · ${ledger.exp.toLocaleString('en')} EXP`,
   });
 
-  const streak = getStreak(logs, today);
-  const streakMark = [...STREAK_MARKS].reverse().find((m) => streak >= m);
+  const streakMark = [...STREAK_MARKS].reverse().find((m) => ledger.streak >= m);
   if (streakMark) {
-    out.push({ kind: 'streak', key: `streak:${streakMark}`, title: `${streakMark}-day streak`, detail: `${streak} days without missing a quest` });
+    out.push({
+      kind: 'streak',
+      key: `streak:${streakMark}`,
+      title: `${streakMark}-day streak · ${flameFor(ledger.streak).name}`,
+      detail: `${ledger.streak} days without missing a quest`,
+    });
+  }
+  if (ledger.perfectWeeks) {
+    out.push({ kind: 'streak', key: `perfect:${ledger.perfectWeeks}`, title: `${ledger.perfectWeeks} perfect week${ledger.perfectWeeks > 1 ? 's' : ''}`, detail: 'Seven verified clears in a week, no rest day' });
   }
 
-  const cleared = countCleared(logs);
-  const clearedMark = [...CLEARED_MARKS].reverse().find((m) => cleared >= m);
+  const clearedMark = [...CLEARED_MARKS].reverse().find((m) => ledger.cleared >= m);
   if (clearedMark) {
-    out.push({ kind: 'milestone', key: `cleared:${clearedMark}`, title: `${clearedMark} quests cleared`, detail: `${cleared} daily quests cleared in total` });
+    out.push({
+      kind: 'milestone',
+      key: `cleared:${clearedMark}`,
+      title: clearedMark === 1 ? 'First quest cleared' : `${clearedMark} quests cleared`,
+      detail: `${ledger.cleared} daily quest${ledger.cleared === 1 ? '' : 's'} cleared in total`,
+    });
+  }
+  if (ledger.dungeonWeeks.size) {
+    out.push({ kind: 'milestone', key: `dungeons:${ledger.dungeonWeeks.size}`, title: `${ledger.dungeonWeeks.size} dungeon${ledger.dungeonWeeks.size > 1 ? 's' : ''} cleared`, detail: 'Weekly instant dungeons conquered' });
   }
 
   const monthly = getMonthly(logs, today);
@@ -51,12 +65,12 @@ export function achievements(logs: Logs, templates: Template[], today: DateStr):
   }
 
   const todayLog = logs[today];
-  if (todayLog?.dailyQuest && todayLog.dailyQuest.tasks.every((t) => Number(todayLog.questProgress?.[t.id] ?? 0) >= t.target)) {
+  if (isComplete(todayLog)) {
     out.push({
       kind: 'quest',
       key: `quest:${today}`,
-      title: todayLog.penaltyAttempt ? 'Penalty quest survived' : 'Daily quest cleared',
-      detail: todayLog.dailyQuest.tasks.map((t) => `${t.target} ${t.unit} ${t.label}`).join(' · '),
+      title: todayLog!.penaltyAttempt ? 'Penalty quest survived' : 'Daily quest cleared',
+      detail: todayLog!.dailyQuest!.tasks.map((t) => `${t.target} ${t.unit} ${t.label}`).join(' · '),
     });
   }
   return out;

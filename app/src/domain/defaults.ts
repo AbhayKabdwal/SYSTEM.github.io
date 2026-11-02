@@ -1,17 +1,25 @@
 import type { Quest, QuestTask, Rank, SkillTree, Template } from './types';
 
-// Game data carried over unchanged from the v1 single-file app.
+// Game data. Quest pool, templates and skill trees are carried over from the v1 app.
 
+/**
+ * Title ladder. `min` is the level a title unlocks at; the rank letter is the rank
+ * band that level sits in. Rank promotion itself needs a Rank-up Trial (ledger.ts).
+ */
 export const RANKS: Rank[]=[
-  {min:0,level:1,rank:'E',title:'Weakling',color:'#778899'},
+  {min:1,level:1,rank:'E',title:'Weakling',color:'#778899'},
   {min:5,level:5,rank:'E',title:'Novice Hunter',color:'#99aacc'},
-  {min:15,level:10,rank:'D',title:'Apprentice',color:'#4499ff'},
-  {min:30,level:20,rank:'D',title:'Fighter',color:'#44aaff'},
-  {min:50,level:35,rank:'C',title:'Warrior',color:'#44ffaa'},
-  {min:75,level:50,rank:'B',title:'Shadow Soldier',color:'#bb44ff'},
-  {min:100,level:70,rank:'A',title:'Elite Hunter',color:'#ff8844'},
-  {min:150,level:90,rank:'S',title:'Shadow Monarch',color:'#ffdd00'},
-  {min:200,level:100,rank:'S',title:'Sung Jin-Woo',color:'#ffffff'},
+  {min:10,level:10,rank:'D',title:'Apprentice',color:'#4499ff'},
+  {min:15,level:15,rank:'D',title:'Fighter',color:'#44aaff'},
+  {min:20,level:20,rank:'C',title:'Warrior',color:'#44ffaa'},
+  {min:27,level:27,rank:'C',title:'Knight',color:'#33ee99'},
+  {min:35,level:35,rank:'B',title:'Shadow Soldier',color:'#bb44ff'},
+  {min:42,level:42,rank:'B',title:'Elite Knight',color:'#aa55ff'},
+  {min:50,level:50,rank:'A',title:'Elite Hunter',color:'#ff8844'},
+  {min:60,level:60,rank:'A',title:'Commander',color:'#ff7733'},
+  {min:70,level:70,rank:'S',title:'National Level Hunter',color:'#ffdd00'},
+  {min:85,level:85,rank:'S',title:'Shadow Monarch',color:'#ffe866'},
+  {min:100,level:100,rank:'S',title:'Monarch of Ascent',color:'#ffffff'},
 ];
 export const DEFAULT_QUEST_POOL: QuestTask[]=[
   {id:'skipping',label:'Skipping',target:10,unit:'min'},

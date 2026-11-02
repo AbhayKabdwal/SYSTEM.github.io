@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cloudEnabled } from '../../cloud/client';
 import {
@@ -7,78 +7,222 @@ import {
   feed,
   FEED_PAGE,
   followingIds,
+  leaderboard,
   like,
   postFeat,
   report,
   searchProfiles,
   unlike,
   type Feat,
+  type BoardScope,
   type FeedScope,
   type Profile,
-  type Visibility,
 } from '../../cloud/social';
-import { achievements, type Achievement } from '../../domain';
+import { achievements, RANK_GATES, weekOf, type Achievement, type Visibility } from '../../domain';
+import { createRepo, uid } from '../../data/repo';
 import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
 import { Card, Dialog, ErrorText, Field, Sec, Seg } from '../../ui/components';
-import { timeAgo, useToday } from '../../ui/hooks';
+import { compressImage } from '../../ui/image';
+import { timeAgo, useLedger, usePhotoUrl, useToday } from '../../ui/hooks';
 import { toast } from '../../ui/notify';
 
-type Tab = 'following' | 'explore' | 'search';
+type Tab = 'following' | 'explore' | 'ranks' | 'search';
+
+const repo = createRepo();
+const JOURNAL_KEY = 'journal';
+
+/** A private feat: stays in this device's database, never synced or uploaded. */
+export interface JournalEntry {
+  id: string;
+  title: string;
+  body: string;
+  photoId: string | null;
+  createdAt: string;
+}
+
+function useJournal() {
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const reload = useCallback(() => void repo.getSetting<JournalEntry[]>(JOURNAL_KEY).then((e) => setEntries(e ?? [])), []);
+  useEffect(reload, [reload]);
+  const save = async (next: JournalEntry[]) => {
+    await repo.putSetting(JOURNAL_KEY, next);
+    setEntries(next);
+  };
+  return { entries, reload, save };
+}
 
 export function HuntersPage() {
   const user = useSession((s) => s.user);
   const [tab, setTab] = useState<Tab>('following');
   const [composing, setComposing] = useState(false);
+  const [showJournal, setShowJournal] = useState(false);
   const [reload, setReload] = useState(0);
+  const journal = useJournal();
+  const online = cloudEnabled && !!user;
 
-  if (!cloudEnabled || !user) {
-    return (
-      <div className="page">
+  return (
+    <div className="page">
+      <button className="btn btn-gold" style={{ marginBottom: 8 }} onClick={() => setComposing(true)}>
+        ◆ SHARE A FEAT ◆
+      </button>
+      <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => setShowJournal((v) => !v)} aria-expanded={showJournal}>
+        🔒 MY PRIVATE FEATS ({journal.entries.length})
+      </button>
+      {showJournal && <Journal entries={journal.entries} onChange={journal.save} />}
+
+      {!online ? (
         <Card>
-          <Sec>HUNTERS</Sec>
-          <p className="prose">Share feats, follow other hunters and cheer them on.</p>
+          <Sec>HUNTERS NETWORK</Sec>
+          <p className="prose">Follow other hunters, like their feats and climb the weekly leaderboard.</p>
           <p className="prose">
-            Sharing is opt-in: nothing from your logs is posted unless you post it yourself, and you choose whether followers or everyone can see it.
+            Sharing is opt-in: every feat and photo is Private, Followers or Global, chosen by you. Private ones never leave this device.
           </p>
           {cloudEnabled ? (
             <Link className="btn btn-grn" to="/account" style={{ marginTop: 12 }}>
               SIGN IN TO JOIN
             </Link>
           ) : (
-            <p className="hint">Not available in this offline build.</p>
+            <p className="hint">The network isn't available in this offline build. Private feats still work.</p>
           )}
         </Card>
-      </div>
-    );
-  }
-
-  return (
-    <div className="page">
-      <button className="btn btn-gold" style={{ marginBottom: 12 }} onClick={() => setComposing(true)}>
-        ◆ SHARE A FEAT ◆
-      </button>
-      <Seg
-        label="Feed"
-        value={tab}
-        onChange={setTab}
-        options={[
-          { value: 'following', label: 'FOLLOWING' },
-          { value: 'explore', label: 'EXPLORE' },
-          { value: 'search', label: 'FIND HUNTERS' },
-        ]}
-      />
-      {tab === 'search' ? <Search /> : <FeedList key={`${tab}-${reload}`} scopeKind={tab} />}
+      ) : (
+        <>
+          <Seg
+            label="Feed"
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: 'following', label: 'FOLLOWING' },
+              { value: 'explore', label: 'GLOBAL' },
+              { value: 'ranks', label: 'RANKS' },
+              { value: 'search', label: 'FIND' },
+            ]}
+          />
+          {tab === 'search' ? <Search /> : tab === 'ranks' ? <Leaderboard /> : <FeedList key={`${tab}-${reload}`} scopeKind={tab} />}
+        </>
+      )}
       {composing && (
         <Composer
+          online={online}
           onClose={() => setComposing(false)}
-          onPosted={() => {
+          onPosted={(vis) => {
             setComposing(false);
-            setReload((n) => n + 1);
+            if (vis === 'private') {
+              journal.reload();
+              setShowJournal(true);
+            } else setReload((n) => n + 1);
           }}
         />
       )}
     </div>
+  );
+}
+
+function Journal({ entries, onChange }: { entries: JournalEntry[]; onChange: (e: JournalEntry[]) => Promise<void> }) {
+  return (
+    <Card className="feed">
+      <Sec>PRIVATE FEATS · THIS DEVICE ONLY</Sec>
+      {!entries.length && <p className="prose muted">Nothing yet. Pick Private when sharing a feat to keep it just for you.</p>}
+      {entries.map((e) => (
+        <article className="feat" key={e.id} style={{ margin: '0 -14px' }}>
+          <div className="feat-head">
+            <span className="tag">PRIVATE</span>
+            <span className="feat-time">{timeAgo(e.createdAt)}</span>
+          </div>
+          <div className="feat-title">{e.title}</div>
+          {e.body && <div className="feat-body">{e.body}</div>}
+          <LocalPhoto id={e.photoId} />
+          <div className="feat-actions">
+            <span style={{ flex: 1 }} />
+            <button
+              className="link-btn"
+              onClick={async () => {
+                if (!confirm('Delete this private feat?')) return;
+                if (e.photoId) await repo.deletePhoto(e.photoId);
+                await onChange(entries.filter((x) => x.id !== e.id));
+              }}
+            >
+              delete
+            </button>
+          </div>
+        </article>
+      ))}
+    </Card>
+  );
+}
+
+function LocalPhoto({ id }: { id: string | null }) {
+  const url = usePhotoUrl(id);
+  return url ? <img className="feat-img" src={url} alt="" /> : null;
+}
+
+function Leaderboard() {
+  const me = useSession((s) => s.user!.id);
+  const share = useApp((s) => s.player?.shareStats);
+  const today = useToday();
+  const week = weekOf(today)[0]!;
+  const [scope, setScope] = useState<'following' | 'global'>('following');
+  const [rows, setRows] = useState<Profile[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null);
+    (async () => {
+      const s: BoardScope = scope === 'global' ? { kind: 'global' } : { kind: 'following', ids: [me, ...(await followingIds(me))] };
+      return leaderboard(s, week);
+    })()
+      .then((r) => !cancelled && setRows(r))
+      .catch((e: Error) => !cancelled && setError(e.message));
+    return () => {
+      cancelled = true;
+    };
+  }, [scope, me, week]);
+
+  return (
+    <Card>
+      <Sec>WEEKLY EXP LEADERBOARD</Sec>
+      <Seg
+        label="Leaderboard scope"
+        value={scope}
+        onChange={setScope}
+        options={[
+          { value: 'following', label: 'YOU + FOLLOWING' },
+          { value: 'global', label: 'GLOBAL' },
+        ]}
+      />
+      {!share && (
+        <p className="hint">
+          You're not on the board. Turn on <Link to="/account">Share stats</Link> to appear.
+        </p>
+      )}
+      {rows === null && !error && <p className="hint">Loading…</p>}
+      {rows?.length === 0 && <p className="prose muted">No one has posted stats this week yet.</p>}
+      {rows?.map((p, i) => {
+        const gate = RANK_GATES.find((g) => g.rank === p.stats?.rank);
+        return (
+          <Link key={p.id} to={`/u/${p.handle}`} className={`board-row${p.id === me ? ' me' : ''}`}>
+            <span className="board-pos">{i + 1}</span>
+            <span className="rank-badge-sm" style={{ color: gate?.color }}>
+              {p.stats?.rank}
+            </span>
+            <span style={{ flex: 1, minWidth: 0 }}>
+              <span className="list-title">{p.display_name}</span>
+              <span className="list-sub">
+                {' '}
+                LVL {p.stats?.level} · 🔥{p.stats?.streak}
+              </span>
+            </span>
+            <span className="board-exp">{p.stats?.weekExp.toLocaleString()}</span>
+          </Link>
+        );
+      })}
+      <ErrorText error={error} />
+      <p className="hint" style={{ marginTop: 8 }}>
+        Stats are reported by each hunter's app.
+      </p>
+    </Card>
   );
 }
 
@@ -164,13 +308,16 @@ function FeatCard({ feat, me, onChange }: { feat: Feat; me: string; onChange: (p
         </Link>
         <span className="feat-time">{timeAgo(feat.created_at)}</span>
       </div>
-      <div className="feat-title">{feat.title}</div>
+      <div className="feat-title">
+        {feat.kind === 'proof' && <span className="tag proof-tag">PROOF</span>} {feat.title}
+      </div>
       {feat.body && <div className="feat-body">{feat.body}</div>}
+      {feat.imageUrl && <img className="feat-img" src={feat.imageUrl} alt={`Photo from @${feat.author.handle}`} loading="lazy" />}
       <div className="feat-actions">
         <button className={`like-btn${feat.likedByMe ? ' on' : ''}`} aria-pressed={feat.likedByMe} onClick={toggleLike}>
           {feat.likedByMe ? '♥' : '♡'} {feat.likeCount}
         </button>
-        {mine && <span className="tag">{feat.visibility === 'public' ? 'PUBLIC' : 'FOLLOWERS'}</span>}
+        {mine && <span className="tag">{feat.visibility === 'public' ? 'GLOBAL' : 'FOLLOWERS'}</span>}
         <span style={{ flex: 1 }} />
         <button className="link-btn" onClick={() => setMenu(true)} aria-label="More actions">
           •••
@@ -183,7 +330,7 @@ function FeatCard({ feat, me, onChange }: { feat: Feat; me: string; onChange: (p
               <button
                 className="btn btn-red"
                 onClick={async () => {
-                  await deleteFeat(feat.id);
+                  await deleteFeat(feat.id, feat.image_path);
                   onChange(null);
                   setMenu(false);
                   toast('FEAT DELETED');
@@ -239,22 +386,49 @@ export function ReportButton({ me, target, onDone }: { me: string; target: { fea
   );
 }
 
-function Composer({ onClose, onPosted }: { onClose: () => void; onPosted: () => void }) {
-  const me = useSession((s) => s.user!.id);
+function Composer({ online, onClose, onPosted }: { online: boolean; onClose: () => void; onPosted: (v: Visibility) => void }) {
+  const me = useSession((s) => s.user?.id);
   const { logs, templates } = useApp();
+  const ledger = useLedger();
   const today = useToday();
-  const options = useMemo(() => achievements(logs, templates, today), [logs, templates, today]);
+  const options = useMemo(() => achievements(ledger, logs, templates, today), [ledger, logs, templates, today]);
   const [picked, setPicked] = useState<Achievement | null>(options[0] ?? null);
   const [title, setTitle] = useState(picked?.title ?? '');
   const [body, setBody] = useState(picked?.detail ?? '');
-  const [visibility, setVisibility] = useState<Visibility>('followers');
+  const [visibility, setVisibility] = useState<Visibility>(online ? 'followers' : 'private');
+  const [photo, setPhoto] = useState<Blob | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   const choose = (a: Achievement | null) => {
     setPicked(a);
     setTitle(a?.title ?? '');
     setBody(a?.detail ?? '');
+  };
+
+  const post = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (visibility === 'private') {
+        const photoId = photo ? await repo.putPhoto(photo) : null;
+        const entries = (await repo.getSetting<JournalEntry[]>(JOURNAL_KEY)) ?? [];
+        await repo.putSetting(JOURNAL_KEY, [{ id: uid(), title: title.trim(), body: body.trim(), photoId, createdAt: new Date().toISOString() }, ...entries]);
+        toast('SAVED PRIVATELY');
+      } else {
+        await postFeat(me!, { kind: picked?.kind ?? 'custom', title: title.trim(), body: body.trim(), visibility }, photo ?? undefined);
+        toast('FEAT SHARED');
+      }
+      onPosted(visibility);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -277,42 +451,69 @@ function Composer({ onClose, onPosted }: { onClose: () => void; onPosted: () => 
       <Field label="MESSAGE (OPTIONAL)" hint={`${body.length}/280`}>
         {(id) => <textarea id={id} className="inp" maxLength={280} value={body} onChange={(e) => setBody(e.target.value)} />}
       </Field>
+      <span className="label">PHOTO (OPTIONAL)</span>
+      {preview ? (
+        <div style={{ marginBottom: 12 }}>
+          <img className="feat-img" src={preview} alt="Selected photo" />
+          <button
+            className="link-btn"
+            onClick={() => {
+              setPhoto(null);
+              setPreview(null);
+            }}
+          >
+            remove photo
+          </button>
+        </div>
+      ) : (
+        <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => fileRef.current?.click()}>
+          📷 ADD PHOTO
+        </button>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (!f) return;
+          try {
+            const blob = await compressImage(f);
+            setPhoto(blob);
+            setPreview(URL.createObjectURL(blob));
+          } catch {
+            setError('Could not read that image.');
+          }
+        }}
+      />
       <span className="label">WHO CAN SEE IT</span>
       <Seg
         label="Visibility"
         value={visibility}
-        onChange={setVisibility}
+        onChange={(v) => (v === 'private' || online ? setVisibility(v) : setError('Sign in to share with followers or globally.'))}
         options={[
+          { value: 'private', label: 'PRIVATE' },
           { value: 'followers', label: 'FOLLOWERS' },
-          { value: 'public', label: 'ALL SIGNED-IN HUNTERS' },
+          { value: 'public', label: 'GLOBAL' },
         ]}
       />
       <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
-        Only the title and message above are posted. Nothing else from your logs is shared.
+        {visibility === 'private'
+          ? 'Kept on this device only. Never uploaded or synced.'
+          : visibility === 'followers'
+            ? 'Hunters who follow you. Only the title, message and photo are posted.'
+            : 'Every signed-in hunter, in the Global feed. Only the title, message and photo are posted.'}
+        {photo && visibility !== 'private' ? ' Photos are re-encoded, which strips location and camera data.' : ''}
       </p>
       <ErrorText error={error} />
       <div className="btn-row">
         <button className="btn" onClick={onClose}>
           CANCEL
         </button>
-        <button
-          className="btn btn-gold"
-          disabled={busy || !title.trim()}
-          onClick={async () => {
-            setBusy(true);
-            setError(null);
-            try {
-              await postFeat(me, { kind: picked?.kind ?? 'custom', title: title.trim(), body: body.trim(), visibility });
-              toast('FEAT SHARED');
-              onPosted();
-            } catch (e) {
-              setError((e as Error).message);
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          POST
+        <button className="btn btn-gold" disabled={busy || !title.trim()} onClick={post}>
+          {busy ? 'POSTING…' : visibility === 'private' ? 'SAVE' : 'POST'}
         </button>
       </div>
     </Dialog>

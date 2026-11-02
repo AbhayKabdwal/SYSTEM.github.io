@@ -4,20 +4,49 @@ import { cloudEnabled } from '../../cloud/client';
 import { useApp } from '../../state/store';
 import { ErrorText } from '../../ui/components';
 import { systemAlert } from '../../ui/notify';
+import { todayStr } from '../../domain';
+import { Calibration } from './Calibration';
 
 export function SetupPage() {
   const { setPlayer, importBackup } = useApp();
   const [name, setName] = useState('');
+  const [step, setStep] = useState<'name' | 'calibrate'>('name');
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    const n = name.trim().toUpperCase();
-    if (!n) return;
-    await setPlayer({ name: n, createdAt: new Date().toISOString(), waterTarget: 8 });
-    systemAlert(`WELCOME TO THE SYSTEM\n${n}`);
+    if (name.trim()) setStep('calibrate');
   };
+
+  if (step === 'calibrate') {
+    const n = name.trim().toUpperCase();
+    return (
+      <div className="splash" style={{ justifyContent: 'flex-start', overflowY: 'auto' }}>
+        <div className="setup-box">
+          <div className="setup-head">
+            <div className="label" style={{ color: 'var(--glow)', letterSpacing: 4 }}>
+              ▲ SYSTEM CALIBRATION ▲
+            </div>
+            <h1>{n}</h1>
+            <p className="prose muted" style={{ marginTop: 8 }}>
+              Answer honestly. The System builds your quests from this and raises the difficulty as you rank up.
+            </p>
+          </div>
+          <Calibration
+            submitLabel="◆ ACCEPT THE SYSTEM ◆"
+            onSubmit={async (prefs) => {
+              await setPlayer({ name: n, createdAt: new Date().toISOString(), waterTarget: 8, prefs, rulesSince: todayStr() });
+              systemAlert(`WELCOME TO THE SYSTEM\n${n}\nClear your daily quest and attach proof every day. Missing a day has a penalty.`);
+            }}
+          />
+          <button type="button" className="link-btn" style={{ marginTop: 12 }} onClick={() => setStep('name')}>
+            ← back
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="splash">
@@ -36,7 +65,7 @@ export function SetupPage() {
         </label>
         <input id="setup-name" className="inp name-inp" placeholder="YOUR NAME…" autoComplete="off" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         <button className="btn btn-grn" style={{ marginTop: 12, padding: 14 }} disabled={!name.trim()}>
-          ◆ ENTER THE SYSTEM ◆
+          NEXT: CALIBRATION ▸
         </button>
         <p className="hint" style={{ textAlign: 'center', marginTop: 10 }}>
           Your data stays on this device. No account needed.

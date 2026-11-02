@@ -6,13 +6,15 @@ import type { DailyLog, Logs, Player, QuestTask, Template } from '../domain';
 const numLike = z.union([z.number(), z.string()]);
 const weights = z.record(z.string(), z.number()).optional();
 
-const questTask = z.object({
-  id: z.string().min(1),
-  label: z.string(),
-  target: z.coerce.number().positive(),
-  unit: z.string(),
-  muscles: weights,
-});
+const questTask = z
+  .object({
+    id: z.string().min(1),
+    label: z.string(),
+    target: z.coerce.number().positive(),
+    unit: z.string(),
+    muscles: weights,
+  })
+  .passthrough();
 
 const exercise = z.object({ id: z.string().min(1), name: z.string(), unit: z.string(), muscles: weights });
 
@@ -29,7 +31,7 @@ const log = z
   .object({
     questProgress: z.record(z.string(), numLike).optional(),
     recovery: z.object({ water: z.coerce.number().default(0), creatine: z.boolean().default(false) }).optional(),
-    dailyQuest: z.object({ name: z.string(), tasks: z.array(questTask) }).optional(),
+    dailyQuest: z.object({ name: z.string(), tasks: z.array(questTask) }).passthrough().optional(),
     penaltyAttempt: z.boolean().optional(),
     penaltyCleared: z.boolean().optional(),
     savedAt: z.string().optional(),

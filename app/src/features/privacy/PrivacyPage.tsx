@@ -19,16 +19,21 @@ export function PrivacyPage() {
         <p className="prose">
           If you sign in and create a vault, your logs and settings are encrypted on your device with AES-256-GCM before upload. The key is protected
           by your vault passphrase (PBKDF2, 600,000 rounds) and a recovery code. Neither is ever sent to the server, so the server, and anyone who
-          runs it, cannot read your data. <strong>Progress photos are never uploaded.</strong>
+          runs it, cannot read your data. <strong>Progress photos and Private proof photos are never uploaded.</strong>
         </p>
         <p className="prose">If you lose both the passphrase and the recovery code, the synced copy cannot be recovered by anyone.</p>
       </Card>
       <Card>
         <Sec>HUNTERS NETWORK</Sec>
         <p className="prose">
-          Visible to other signed-in users: your handle, display name, bio, who you follow, and the feats you choose to post. Feats are visible to
-          followers by default; you can make one public. You can delete feats, block users (which hides you from each other and removes follows) and
-          report abuse.
+          Visible to other signed-in users: your handle, display name, bio, who you follow, and the feats you choose to post. Every feat and proof
+          photo is one of three modes: <strong>Private</strong> stays on this device and is never uploaded; <strong>Followers</strong> is visible
+          only to people who follow you; <strong>Global</strong> is visible to every signed-in hunter. Shared photos sit in private storage and are
+          served through short-lived links only to people allowed to see that feat. Deleting a feat deletes its photo.
+        </p>
+        <p className="prose">
+          <strong>Share stats</strong> (off by default) adds your level, rank, streak and this week's EXP to your profile and the leaderboard. You can
+          delete feats, block users (which hides you from each other and removes follows) and report abuse.
         </p>
       </Card>
       <Card>

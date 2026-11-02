@@ -3,6 +3,7 @@ import { cloudEnabled } from '../../cloud/client';
 import { deleteAccount, handleAvailable, HANDLE_RE, passwordProblem, sendPasswordReset, signIn, signOut, signUp, updatePassword } from '../../cloud/auth';
 import { blockedProfiles, unblock, updateProfile, type Profile } from '../../cloud/social';
 import { useSession } from '../../state/session';
+import { useApp } from '../../state/store';
 import { Card, Dialog, ErrorText, Field, Sec, Seg } from '../../ui/components';
 import { systemAlert, toast } from '../../ui/notify';
 import { timeAgo } from '../../ui/hooks';
@@ -493,7 +494,27 @@ function ProfileEditor() {
         </button>
         <ErrorText error={error} />
       </form>
+      <ShareStatsToggle />
     </Card>
+  );
+}
+
+/** Opt-in: level, rank, streak and this week's EXP on your profile and the leaderboard. */
+function ShareStatsToggle() {
+  const player = useApp((s) => s.player);
+  const setPlayer = useApp((s) => s.setPlayer);
+  if (!player) return null;
+  return (
+    <label className="check" style={{ marginTop: 14 }}>
+      <input type="checkbox" checked={!!player.shareStats} onChange={(e) => void setPlayer({ ...player, shareStats: e.target.checked })} />
+      <span>
+        <span className="list-title">Share stats</span>
+        <span className="hint" style={{ display: 'block' }}>
+          Show your level, rank, streak and this week's EXP on your profile and the weekly leaderboard. Nothing else from your logs is shared. Turning
+          it off removes them.
+        </span>
+      </span>
+    </label>
   );
 }
 

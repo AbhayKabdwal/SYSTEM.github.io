@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { bodyFatigue, logMuscleLoad, MUSCLES, muscleFatigue, muscleState, recoveryAdvice, type Muscle } from '../../domain';
+import { bodyFatigue, logMuscleLoad, muscleCapacity, MUSCLES, muscleFatigue, muscleState, recoveryAdvice, type Muscle } from '../../domain';
 import { useApp } from '../../state/store';
 import { Card, Sec } from '../../ui/components';
-import { fmtDate, useToday } from '../../ui/hooks';
-import { BodyMap, fatigueColor, LEGEND } from './BodyMap';
+import { fmtDate, useLedger, useToday } from '../../ui/hooks';
+import { ANATOMY_CREDIT, BodyMap, fatigueColor, LEGEND } from './BodyMap';
 
 const STATE_LABEL = { fresh: 'Fresh', worked: 'Worked', strained: 'Strained', overloaded: 'Overloaded' } as const;
 
@@ -12,7 +12,8 @@ export function BodyPage() {
   const templates = useApp((s) => s.templates);
   // Re-evaluate when the day changes; within a day the map moves slowly enough.
   const today = useToday();
-  const fatigue = useMemo(() => muscleFatigue(logs, templates), [logs, templates, today]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { tier } = useLedger();
+  const fatigue = useMemo(() => muscleFatigue(logs, templates, new Date(), tier), [logs, templates, today, tier]); // eslint-disable-line react-hooks/exhaustive-deps
   const [selected, setSelected] = useState<Muscle | null>(null);
   const overall = bodyFatigue(fatigue);
 
@@ -21,7 +22,7 @@ export function BodyPage() {
     return Object.keys(logs)
       .sort((a, b) => b.localeCompare(a))
       .slice(0, 14)
-      .map((d) => ({ date: d, load: logMuscleLoad(logs[d]!, templates)[selected] ?? 0 }))
+      .map((d) => ({ date: d, load: logMuscleLoad(logs, templates, d)[selected] ?? 0 }))
       .filter((x) => x.load > 0)
       .slice(0, 5);
   }, [selected, logs, templates]);
@@ -45,6 +46,9 @@ export function BodyPage() {
             </span>
           ))}
         </div>
+        <p className="hint" style={{ textAlign: 'center' }}>
+          Tap a muscle for details.
+        </p>
       </Card>
 
       {selected && (
@@ -64,7 +68,7 @@ export function BodyPage() {
             recentForSelected.map((r) => (
               <div className="kv" key={r.date}>
                 <span>{fmtDate(r.date)}</span>
-                <span>{r.load.toFixed(1)} units</span>
+                <span>{r.load.toFixed(1)} hard sets</span>
               </div>
             ))
           ) : (
@@ -91,10 +95,21 @@ export function BodyPage() {
       <Card>
         <Sec>HOW THIS WORKS</Sec>
         <p className="prose">
-          Every logged set and quest task adds load to the muscles it works: primary movers take full load, helpers about half. Load fades with each
-          muscle's recovery half-life (small muscles recover faster), and the percentage saturates so a single huge session tops out near 100%.
+          Load is counted in hard sets: sets taken close to failure. Quest totals are converted using a typical hard set for each exercise (about 15
+          push-ups, 25 squats, 45 s of plank). Gym sets are compared with your own recent bests, so 8 reps at 80% of your best counts as a hard set
+          and 8 reps at 50% counts for much less. Add an RPE to a set to say exactly how hard it was.
+        </p>
+        <p className="prose">
+          Primary movers take the full set, helpers about half. Fatigue fades with each muscle's recovery half-life: about 30 h for legs and lower
+          back, 26 h for chest and lats, 16–20 h for arms, calves and abs. Around {Math.round(muscleCapacity(tier))} hard sets in a day reads as about
+          63%, and the scale saturates so nothing passes 100%. Higher ranks tolerate slightly more.
         </p>
         <p className="prose">Custom exercises are matched to muscles by name. You can set them exactly in the Training registry.</p>
+        <p className="credit">
+          <a href={ANATOMY_CREDIT.url} target="_blank" rel="noreferrer noopener">
+            {ANATOMY_CREDIT.text}
+          </a>
+        </p>
       </Card>
     </div>
   );

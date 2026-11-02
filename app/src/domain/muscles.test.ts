@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bodyFatigue, guessMuscles, logMuscleLoad, muscleFatigue, muscleState, musclesFor, recoveryAdvice, setLoad } from './muscles';
+import { bodyFatigue, dayLoads, EffortModel, guessMuscles, muscleFatigue, muscleState, musclesFor, questTaskHse, recoveryAdvice, rirFactor } from './muscles';
 import { DEFAULT_TEMPLATES } from './defaults';
 import type { DailyLog, Logs } from './types';
 import { QUEST } from './testUtils';
@@ -24,17 +24,41 @@ describe('muscle mapping', () => {
   });
 });
 
-describe('setLoad', () => {
-  it('scales by unit', () => {
-    expect(setLoad('reps', { v: 100 })).toBe(10);
-    expect(setLoad('kg', { v: 60, reps: 8 })).toBeCloseTo(3.2);
-    expect(setLoad('km', { v: 3 })).toBe(9);
-    expect(setLoad('stage', { v: 'Frog Stand', seconds: 30 })).toBe(2);
+describe('effort model', () => {
+  it('scores sets by reps in reserve', () => {
+    expect(rirFactor(0)).toBe(1);
+    expect(rirFactor(3)).toBe(1);
+    expect(rirFactor(5)).toBeLessThan(rirFactor(4));
+    expect(rirFactor(12)).toBe(0.25);
   });
 
-  it('treats junk as zero', () => {
-    expect(setLoad('reps', { v: 'abc' })).toBe(0);
-    expect(setLoad('kg', { v: -5, reps: 8 })).toBeCloseTo(0.8);
+  it('a light set after a heavy one counts for less', () => {
+    const m = new EffortModel();
+    m.observe('bench', 'kg', { v: 100, reps: 5 });
+    expect(m.setHse('bench', 'kg', { v: 100, reps: 5 })).toBe(1);
+    expect(m.setHse('bench', 'kg', { v: 50, reps: 5 })).toBeLessThan(0.5);
+  });
+
+  it('RPE overrides the estimate', () => {
+    const m = new EffortModel();
+    m.observe('bench', 'kg', { v: 100, reps: 5 });
+    expect(m.setHse('bench', 'kg', { v: 50, reps: 5, rpe: 9 })).toBe(1);
+  });
+
+  it('compares bodyweight reps and holds with your best', () => {
+    const m = new EffortModel();
+    expect(m.setHse('pu', 'reps', { v: 20 })).toBe(1);
+    m.observe('pu', 'reps', { v: 20 });
+    expect(m.setHse('pu', 'reps', { v: 10 })).toBeLessThan(0.5);
+    m.observe('plank', 'sec', { v: 120 });
+    expect(m.setHse('plank', 'sec', { v: 110 })).toBe(1);
+    expect(m.setHse('plank', 'sec', { v: 30 })).toBeLessThan(0.5);
+  });
+
+  it('turns quest totals into hard sets', () => {
+    expect(questTaskHse({ id: 'pushup', label: 'Push-ups', target: 45, unit: 'reps' }, 45)).toBe(3);
+    expect(questTaskHse({ id: 'x', label: 'X', target: 10, unit: 'reps', hardSet: 5 }, 10)).toBe(2);
+    expect(questTaskHse({ id: 'x', label: 'X', target: 10, unit: 'reps' }, 'abc')).toBe(0);
   });
 });
 
@@ -42,14 +66,23 @@ describe('muscleFatigue', () => {
   const pushDay: DailyLog = { dailyQuest: QUEST, questProgress: { pushups: 100, squats: 0 }, savedAt: '2026-11-01T18:00:00+05:30' };
 
   it('loads the right muscles from quest tasks', () => {
-    const load = logMuscleLoad(pushDay, []);
-    expect(load.chest).toBe(10);
+    const load = dayLoads({ d: pushDay }, []).d!.muscles;
+    expect(load.chest).toBe(5);
     expect(load.quads).toBeUndefined();
   });
 
   it('includes training sets from the chosen template', () => {
-    const log: DailyLog = { templateId: 'tpl_chest', exLogs: { e_bpress: { sets: [{ v: 60, reps: 8 }] } } };
-    expect(logMuscleLoad(log, DEFAULT_TEMPLATES).chest).toBeCloseTo(3.2);
+    const log: DailyLog = { templateId: 'tpl_chest', exLogs: { e_bpress: { sets: [{ v: 60, reps: 8 }, { v: 60, reps: 8 }] } } };
+    expect(dayLoads({ d: log }, DEFAULT_TEMPLATES).d!.muscles.chest).toBe(2);
+  });
+
+  it('a full chest session reads strained, then mostly recovers in three days', () => {
+    const sets = Array.from({ length: 4 }, () => ({ v: 60, reps: 8 }));
+    const log: DailyLog = { templateId: 'tpl_chest', trainingSavedAt: '2026-11-01T18:00:00+05:30', exLogs: { e_bpress: { sets }, e_ipress: { sets } } };
+    const logs: Logs = { '2026-11-01': log };
+    const now = muscleFatigue(logs, DEFAULT_TEMPLATES, at('2026-11-01T19:00:00+05:30')).chest;
+    expect(muscleState(now)).toMatch(/strained|overloaded/);
+    expect(muscleFatigue(logs, DEFAULT_TEMPLATES, at('2026-11-04T18:00:00+05:30')).chest).toBeLessThan(25);
   });
 
   it('decays over time and stays within 0–100', () => {
@@ -65,10 +98,9 @@ describe('muscleFatigue', () => {
     expect(muscleFatigue({ '2026-11-05': pushDay }, [], at('2026-11-01T12:00:00+05:30')).chest).toBe(0);
   });
 
-  it('reads one quest task as light load, well short of strained', () => {
+  it('reads 100 push-ups as real work, short of overloaded', () => {
     const pct = muscleFatigue({ '2026-11-01': pushDay }, [], at('2026-11-01T19:00:00+05:30')).chest;
-    expect(muscleState(pct)).toBe('fresh');
-    expect(pct).toBeGreaterThan(15);
+    expect(muscleState(pct)).toMatch(/worked|strained/);
   });
 
   it('saturates under huge load', () => {

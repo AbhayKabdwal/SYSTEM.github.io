@@ -1,50 +1,70 @@
-import type { ReactElement } from 'react';
+import { useId, type ReactElement } from 'react';
 import { MUSCLES, type Muscle } from '../../domain';
+import frontImg from '../../assets/anatomy-front.png';
+import backImg from '../../assets/anatomy-back.png';
 
-// Stylised anatomy on a 100×200 grid per view. Shapes are drawn for the viewer's
-// left side and mirrored, so both sides always match.
+// Anatomy art: OpenStax, "Anatomy and Physiology" fig. 11.5 (CC BY 4.0), labels and
+// leader lines removed. Regions below are in the image's own pixel space and are
+// drawn blurred and clipped to the body, so they read as a heat map, not stickers.
 
-type Shape = { kind: 'ellipse'; cx: number; cy: number; rx: number; ry: number; rot?: number } | { kind: 'path'; d: string };
+type Shape = { kind: 'ellipse'; cx: number; cy: number; rx: number; ry: number; rot?: number; single?: boolean } | { kind: 'path'; d: string; single?: boolean };
 
-const e = (cx: number, cy: number, rx: number, ry: number, rot = 0): Shape => ({ kind: 'ellipse', cx, cy, rx, ry, rot });
-const p = (d: string): Shape => ({ kind: 'path', d });
+const e = (cx: number, cy: number, rx: number, ry: number, rot = 0, single = false): Shape => ({ kind: 'ellipse', cx, cy, rx, ry, rot, single });
+const p = (d: string): Shape => ({ kind: 'path', d, single: true });
 
-const FRONT: [Muscle, Shape][] = [
-  ['traps', p('M44 25 L37 31 L45 31 Z')],
-  ['front_delts', e(32.5, 36, 5.2, 6.5, 15)],
-  ['side_delts', e(27.5, 38, 2.8, 6, 10)],
-  ['chest', p('M49.5 32 L38 33.5 Q34.5 41 38 47 Q44 49.5 49.5 47.5 Z')],
-  ['biceps', e(28, 53, 4, 9, 8)],
-  ['forearms', e(24, 73, 3.8, 10.5, 10)],
-  ['abs', p('M44.5 50 L49.5 50 L49.5 79 Q46 79 44.5 76 Z')],
-  ['obliques', p('M38.5 50 L43.5 51 L43.5 75 Q39.5 70 38.5 62 Z')],
-  ['quads', p('M38 86 Q36 104 39 128 L45.5 128 Q48.5 106 47 88 Z')],
-  ['calves', e(41.5, 151, 4, 13)],
-];
+interface View {
+  caption: string;
+  src: string;
+  w: number;
+  h: number;
+  /** Mirror axis for paired muscles. */
+  mid: number;
+  shapes: [Muscle, Shape][];
+}
 
-const BACK: [Muscle, Shape][] = [
-  ['traps', p('M50 23 L39 31 L44 35 L50 52 Z')],
-  ['rear_delts', e(32.5, 36, 5.2, 6.5, -15)],
-  ['side_delts', e(27.5, 38, 2.8, 6, 10)],
-  ['lats', p('M38.5 39 L44 36 L49.5 55 L49.5 64 L42 63 Q36.5 52 38.5 39 Z')],
-  ['triceps', e(28, 53, 4, 9, 8)],
-  ['forearms', e(24, 73, 3.8, 10.5, 10)],
-  ['lower_back', p('M43 64 L49.5 65 L49.5 80 L42 80 Q41 72 43 64 Z')],
-  ['glutes', e(43, 89, 7.5, 8)],
-  ['hamstrings', p('M37.5 98 Q36.5 112 39.5 130 L45.5 130 Q48 113 47.5 98 Z')],
-  ['calves', e(41.5, 148, 5, 12)],
-];
+const FRONT: View = {
+  caption: 'FRONT',
+  src: frontImg,
+  w: 396,
+  h: 720,
+  mid: 199,
+  shapes: [
+    ['traps', e(172, 122, 18, 7, -25)],
+    ['front_delts', e(113, 152, 15, 24, 15)],
+    ['side_delts', e(98, 162, 8, 22, 10)],
+    ['chest', e(160, 178, 34, 31)],
+    ['biceps', e(92, 232, 13, 36, 22)],
+    ['forearms', e(63, 318, 12, 40, 25)],
+    ['abs', e(199, 282, 24, 62, 0, true)],
+    ['obliques', e(146, 270, 12, 42, -5)],
+    ['quads', e(163, 425, 27, 62, -4)],
+    ['calves', e(163, 565, 15, 48)],
+  ],
+};
 
-/** Silhouette under the muscles, also mirrored. */
-const BASE_HALF = [
-  'M50 23 L44 25 Q36 28 30 31 Q24 34 24 42 L22 60 L19 84 Q19 88 22 88 L27 66 L31 48 L35 50 L37 74 L36 90 L36 104 L38 132 L37 164 L39 178 L46 178 L46 166 L47 134 L49 104 L50 96 Z',
-];
+const BACK: View = {
+  caption: 'BACK',
+  src: backImg,
+  w: 361,
+  h: 720,
+  mid: 182,
+  shapes: [
+    ['traps', p('M182 88 L232 132 L205 175 L182 250 L159 175 L132 132 Z')],
+    ['rear_delts', e(102, 170, 16, 22, -10)],
+    ['side_delts', e(88, 178, 8, 22, 10)],
+    ['lats', e(140, 235, 24, 50, -18)],
+    ['triceps', e(86, 238, 13, 36, 18)],
+    ['forearms', e(62, 320, 12, 38, 24)],
+    ['lower_back', e(182, 288, 30, 22, 0, true)],
+    ['glutes', e(152, 336, 30, 30)],
+    ['hamstrings', e(157, 425, 24, 55, -3)],
+    ['calves', e(158, 540, 20, 50)],
+  ],
+};
 
-function mirror(s: Shape): Shape {
-  if (s.kind === 'ellipse') return { ...s, cx: 100 - s.cx, rot: -(s.rot ?? 0) };
-  // Flip x of every coordinate pair in an absolute path.
-  const d = s.d.replace(/(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)/g, (_, x, y) => `${100 - Number(x)} ${y}`);
-  return { kind: 'path', d };
+function mirror(s: Shape, mid: number): Shape {
+  if (s.kind === 'ellipse') return { ...s, cx: 2 * mid - s.cx, rot: -(s.rot ?? 0) };
+  return s;
 }
 
 function draw(s: Shape, props: Record<string, unknown>, key: string): ReactElement {
@@ -53,6 +73,8 @@ function draw(s: Shape, props: Record<string, unknown>, key: string): ReactEleme
   }
   return <path key={key} d={s.d} {...props} />;
 }
+
+const both = (v: View) => v.shapes.flatMap(([m, s]) => (s.single ? [[m, s, 0] as const] : [[m, s, 0] as const, [m, mirror(s, v.mid), 1] as const]));
 
 /** fresh → worked → strained → overloaded */
 export function fatigueColor(pct: number): string {
@@ -72,36 +94,30 @@ export const LEGEND = [
 
 const label = (m: Muscle) => MUSCLES.find((x) => x.id === m)!.label;
 
-function View({
-  shapes,
-  fatigue,
-  selected,
-  onSelect,
-  caption,
-}: {
-  shapes: [Muscle, Shape][];
-  fatigue: Record<Muscle, number>;
-  selected: Muscle | null;
-  onSelect: (m: Muscle) => void;
-  caption: string;
-}) {
+function AnatomyView({ view, fatigue, selected, onSelect }: { view: View; fatigue: Record<Muscle, number>; selected: Muscle | null; onSelect: (m: Muscle) => void }) {
+  const blurId = `blur${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const mask = { maskImage: `url(${view.src})`, WebkitMaskImage: `url(${view.src})` };
+  const shapes = both(view);
   return (
     <figure className="body-map">
-      <svg viewBox="10 4 80 180" role="group" aria-label={`${caption} muscle map`}>
-        <circle className="base" cx="50" cy="13" r="8.5" />
-        {BASE_HALF.map((d, i) => (
-          <g key={i}>
-            <path className="base" d={d} />
-            <path className="base" d={(mirror(p(d)) as { d: string }).d} />
+      <div className="anatomy" style={{ aspectRatio: `${view.w} / ${view.h}` }}>
+        <img src={view.src} alt="" draggable={false} />
+        <svg className="heat" viewBox={`0 0 ${view.w} ${view.h}`} style={mask} aria-hidden>
+          <defs>
+            <filter id={blurId} x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="6" />
+            </filter>
+          </defs>
+          <g filter={`url(#${blurId})`}>
+            {shapes.map(([m, s, side], i) => draw(s, { fill: fatigueColor(fatigue[m]) }, `${m}-${i}-${side}`))}
           </g>
-        ))}
-        {shapes.flatMap(([m, s], i) =>
-          [s, mirror(s)].map((shape, side) =>
+        </svg>
+        <svg className="hit" viewBox={`0 0 ${view.w} ${view.h}`} role="group" aria-label={`${view.caption.toLowerCase()} muscle map`}>
+          {shapes.map(([m, s, side], i) =>
             draw(
-              shape,
+              s,
               {
-                className: `muscle${selected === m ? ' selected' : ''}`,
-                fill: fatigueColor(fatigue[m]),
+                className: `muscle-hit${selected === m ? ' selected' : ''}`,
                 onClick: () => onSelect(m),
                 role: 'button',
                 tabIndex: side === 0 ? 0 : -1,
@@ -110,10 +126,10 @@ function View({
               },
               `${m}-${i}-${side}`,
             ),
-          ),
-        )}
-      </svg>
-      <figcaption className="body-map-caption">{caption}</figcaption>
+          )}
+        </svg>
+      </div>
+      <figcaption className="body-map-caption">{view.caption}</figcaption>
     </figure>
   );
 }
@@ -121,8 +137,13 @@ function View({
 export function BodyMap(props: { fatigue: Record<Muscle, number>; selected: Muscle | null; onSelect: (m: Muscle) => void }) {
   return (
     <div className="body-maps">
-      <View shapes={FRONT} caption="FRONT" {...props} />
-      <View shapes={BACK} caption="BACK" {...props} />
+      <AnatomyView view={FRONT} {...props} />
+      <AnatomyView view={BACK} {...props} />
     </div>
   );
 }
+
+export const ANATOMY_CREDIT = {
+  text: 'Anatomy art: OpenStax, Anatomy and Physiology, fig. 11.5, CC BY 4.0. Labels removed.',
+  url: 'https://commons.wikimedia.org/wiki/File:1105_Anterior_and_Posterior_Views_of_Muscles.jpg',
+};

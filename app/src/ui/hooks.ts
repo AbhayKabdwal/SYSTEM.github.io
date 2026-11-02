@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { EXP_PER_RANK_POINT, getRank, isPenalty, todayStr, totalExp } from '../domain';
+import { computeLedger, questForDate, todayStr, type Ledger, type Quest, type Tier } from '../domain';
 import { useApp } from '../state/store';
 import { createRepo } from '../data/repo';
 
@@ -18,19 +18,38 @@ export function useToday() {
   return today;
 }
 
-export function useRankInfo() {
+/** Replayed game state: EXP, level, rank, streak, penalties. */
+export function useLedger(): Ledger {
   const logs = useApp((s) => s.logs);
   const templates = useApp((s) => s.templates);
-  return useMemo(() => {
-    const exp = totalExp(logs, templates);
-    return { exp, rank: getRank(exp / EXP_PER_RANK_POINT) };
-  }, [logs, templates]);
+  const player = useApp((s) => s.player);
+  const today = useToday();
+  return useMemo(() => computeLedger(logs, templates, player, today), [logs, templates, player, today]);
 }
 
-export function usePenalty() {
+export const usePenalty = () => useLedger().penaltyToday;
+
+/** The quest for a date: the stored one if the day was saved, otherwise generated. */
+export function useQuestFor(date: string, ledger: Ledger): Quest {
   const logs = useApp((s) => s.logs);
+  const questPool = useApp((s) => s.questPool);
+  const prefs = useApp((s) => s.player?.prefs);
   const today = useToday();
-  return useMemo(() => isPenalty(logs, today), [logs, today]);
+  const saved = logs[date]?.dailyQuest;
+  return useMemo(
+    () =>
+      saved ??
+      questForDate(date, {
+        today,
+        penalty: date === today && ledger.penaltyToday,
+        pool: questPool,
+        logs,
+        prefs,
+        tier: ledger.tier as Tier,
+        progress: ledger.rankProgress,
+      }),
+    [saved, date, today, ledger.penaltyToday, ledger.tier, ledger.rankProgress, questPool, logs, prefs],
+  );
 }
 
 const repo = createRepo();

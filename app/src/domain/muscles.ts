@@ -1,30 +1,34 @@
 import { parseDateStr } from './dates';
-import type { DailyLog, ExerciseSet, Logs, Muscle, MuscleWeights, QuestTask, Template } from './types';
+import { libraryExercise } from './library';
+import type { DailyLog, DateStr, ExerciseSet, Logs, Muscle, MuscleWeights, Pattern, QuestTask, Template } from './types';
 
 export interface MuscleInfo {
   id: Muscle;
   label: string;
-  /** Hours for accumulated load to halve. Big muscles recover slower. */
+  /**
+   * Hours for accumulated load to halve. Large, slow-twitch-heavy muscles recover
+   * slower; small ones like calves and forearms bounce back within a day or two.
+   */
   halfLife: number;
 }
 
 export const MUSCLES: MuscleInfo[] = [
-  { id: 'chest', label: 'Chest', halfLife: 40 },
-  { id: 'front_delts', label: 'Front Delts', halfLife: 30 },
-  { id: 'side_delts', label: 'Side Delts', halfLife: 28 },
-  { id: 'rear_delts', label: 'Rear Delts', halfLife: 28 },
-  { id: 'biceps', label: 'Biceps', halfLife: 30 },
-  { id: 'triceps', label: 'Triceps', halfLife: 30 },
-  { id: 'forearms', label: 'Forearms', halfLife: 24 },
-  { id: 'abs', label: 'Abs', halfLife: 24 },
-  { id: 'obliques', label: 'Obliques', halfLife: 24 },
-  { id: 'lats', label: 'Lats', halfLife: 40 },
-  { id: 'traps', label: 'Traps', halfLife: 32 },
-  { id: 'lower_back', label: 'Lower Back', halfLife: 48 },
-  { id: 'glutes', label: 'Glutes', halfLife: 44 },
-  { id: 'quads', label: 'Quads', halfLife: 48 },
-  { id: 'hamstrings', label: 'Hamstrings', halfLife: 48 },
-  { id: 'calves', label: 'Calves', halfLife: 24 },
+  { id: 'chest', label: 'Chest', halfLife: 26 },
+  { id: 'front_delts', label: 'Front Delts', halfLife: 20 },
+  { id: 'side_delts', label: 'Side Delts', halfLife: 18 },
+  { id: 'rear_delts', label: 'Rear Delts', halfLife: 18 },
+  { id: 'biceps', label: 'Biceps', halfLife: 20 },
+  { id: 'triceps', label: 'Triceps', halfLife: 20 },
+  { id: 'forearms', label: 'Forearms', halfLife: 16 },
+  { id: 'abs', label: 'Abs', halfLife: 16 },
+  { id: 'obliques', label: 'Obliques', halfLife: 16 },
+  { id: 'lats', label: 'Lats', halfLife: 26 },
+  { id: 'traps', label: 'Traps', halfLife: 22 },
+  { id: 'lower_back', label: 'Lower Back', halfLife: 30 },
+  { id: 'glutes', label: 'Glutes', halfLife: 28 },
+  { id: 'quads', label: 'Quads', halfLife: 30 },
+  { id: 'hamstrings', label: 'Hamstrings', halfLife: 30 },
+  { id: 'calves', label: 'Calves', halfLife: 16 },
 ];
 
 export const MUSCLE_IDS = MUSCLES.map((m) => m.id);
@@ -82,28 +86,144 @@ const num = (v: unknown) => {
   return Number.isFinite(n) && n > 0 ? n : 0;
 };
 
+// ── Effort model ────────────────────────────────────────────────────────────
+// Load is counted in hard-set equivalents (HSE): one set taken to within ~3 reps of
+// failure. Hypertrophy and fatigue research both count volume this way, so a set of 20
+// easy curls counts for less than a grinding set of 5.
+
+/** Share of a hard set by reps in reserve. */
+export function rirFactor(rir: number): number {
+  if (rir <= 3) return 1;
+  if (rir <= 4) return 0.8;
+  if (rir <= 5) return 0.6;
+  if (rir <= 6) return 0.45;
+  if (rir <= 7) return 0.35;
+  return 0.25;
+}
+
+/** Assumed reps in reserve for a first-ever set, when there's no history to compare with. */
+const FIRST_SET_RIR = 2;
+/** Cardio: km or minutes per HSE when the exercise doesn't say. */
+const CARDIO_PER_HSE = { km: 1.5, min: 12 } as const;
+const DEFAULT_HARD_SET: Record<string, number> = { reps: 20, sec: 45, min: 12, km: 1.5 };
+
+const epley = (kg: number, reps: number) => kg * (1 + reps / 30);
+
 /**
- * Work units for one set, roughly "1 unit = 10 bodyweight reps".
- * 100 push-ups ≈ 10 units; one set of 8 at 60 kg ≈ 3.2 units; 3 km run ≈ 9 units.
+ * Tracks bests per exercise in date order so each set's effort can be estimated
+ * against what you could do at the time: 8 reps at 80% of your best 1RM is a hard
+ * set, 8 reps at 50% isn't. An RPE on the set overrides the estimate.
  */
-export function setLoad(unit: string, set: ExerciseSet): number {
-  switch (unit) {
-    case 'kg':
-      return (num(set.reps) * (1 + num(set.v) / 20)) / 10;
-    case 'km':
-      return num(set.v) * 3;
-    case 'min':
-      return num(set.v) * 0.6;
-    case 'sec':
-      return num(set.v) / 20;
-    case 'stage':
-      return num(set.seconds) / 15;
-    default: // reps
-      return num(set.v) / 10;
+export class EffortModel {
+  private best = new Map<string, number>();
+
+  setHse(exId: string, unit: string, set: ExerciseSet): number {
+    const rpe = num(set.rpe);
+    const fromRpe = rpe ? rirFactor(10 - Math.min(10, rpe)) : null;
+    switch (unit) {
+      case 'kg': {
+        const kg = num(set.v);
+        const reps = num(set.reps);
+        if (!reps) return 0;
+        if (fromRpe !== null) return fromRpe;
+        const best = this.best.get(exId);
+        if (!best || !kg) return rirFactor(best ? Math.max(0, best - reps) : FIRST_SET_RIR);
+        const repsToFailure = Math.max(reps, 30 * (best / kg - 1));
+        return rirFactor(repsToFailure - reps);
+      }
+      case 'km':
+        return num(set.v) / CARDIO_PER_HSE.km;
+      case 'min':
+        return num(set.v) / CARDIO_PER_HSE.min;
+      default: {
+        // reps, sec, stage: compare with your best single set.
+        const v = unit === 'stage' ? num(set.seconds) : num(set.v);
+        if (!v) return 0;
+        if (fromRpe !== null) return fromRpe;
+        const best = this.best.get(exId);
+        if (!best) return rirFactor(FIRST_SET_RIR);
+        // Holds have no reps; treat each tenth of your best as one rep in reserve.
+        const rir = unit === 'reps' ? best - v : 10 * (1 - v / best);
+        return rirFactor(Math.max(0, rir));
+      }
+    }
+  }
+
+  observe(exId: string, unit: string, set: ExerciseSet) {
+    const v = unit === 'kg' ? (num(set.v) ? epley(num(set.v), num(set.reps)) : num(set.reps)) : unit === 'stage' ? num(set.seconds) : num(set.v);
+    if (v > (this.best.get(exId) ?? 0)) this.best.set(exId, v);
   }
 }
 
-export const questTaskLoad = (task: QuestTask, value: unknown) => setLoad(String(task.unit), { v: num(value) });
+/** Quest tasks are a day's total, so effort is total ÷ one hard set's worth. */
+export function questTaskHse(task: QuestTask, value: unknown): number {
+  const v = num(value);
+  if (!v) return 0;
+  const per = task.hardSet ?? libraryExercise(task.id)?.hardSet ?? DEFAULT_HARD_SET[String(task.unit)] ?? 20;
+  return v / per;
+}
+
+export type StatAxis = 'strength' | 'agility' | 'skill';
+
+function axisFor(pattern: Pattern | undefined, unit: string): StatAxis {
+  if (pattern === 'cardio' || pattern === 'conditioning' || unit === 'km' || unit === 'min') return 'agility';
+  if (pattern === 'core' || pattern === 'mobility' || unit === 'stage') return 'skill';
+  return 'strength';
+}
+
+export interface DayLoad {
+  /** HSE per muscle, weighted by how much of the movement each muscle does. */
+  muscles: Partial<Record<Muscle, number>>;
+  questHse: number;
+  trainingHse: number;
+  axes: Record<StatAxis, number>;
+}
+
+const cache = new WeakMap<Logs, WeakMap<Template[], Record<DateStr, DayLoad>>>();
+
+/** Per-day effort for every log, computed once per (logs, templates) pair. */
+export function dayLoads(logs: Logs, templates: Template[]): Record<DateStr, DayLoad> {
+  const hit = cache.get(logs)?.get(templates);
+  if (hit) return hit;
+  const model = new EffortModel();
+  const out: Record<DateStr, DayLoad> = {};
+  for (const date of Object.keys(logs).sort()) {
+    const log = logs[date]!;
+    const day: DayLoad = { muscles: {}, questHse: 0, trainingHse: 0, axes: { strength: 0, agility: 0, skill: 0 } };
+    const add = (weights: MuscleWeights, hse: number) => {
+      for (const [m, w] of Object.entries(weights) as [Muscle, number][]) day.muscles[m] = (day.muscles[m] ?? 0) + hse * w;
+    };
+    const sides = Object.values(log.side ?? {}).map((s) => ({ tasks: s!.quest.tasks, progress: s!.progress }));
+    for (const { tasks, progress } of [{ tasks: log.dailyQuest?.tasks ?? [], progress: log.questProgress ?? {} }, ...sides]) {
+      for (const task of tasks) {
+        const hse = questTaskHse(task, progress[task.id]);
+        if (!hse) continue;
+        add(musclesFor(task), hse);
+        day.questHse += hse;
+        day.axes[axisFor(task.pattern ?? libraryExercise(task.id)?.pattern, String(task.unit))] += hse;
+      }
+    }
+    const tpl = templates.find((t) => t.id === log.templateId);
+    for (const ex of tpl?.exercises ?? []) {
+      const unit = String(ex.unit);
+      const sets = log.exLogs?.[ex.id]?.sets ?? [];
+      // Score the whole session against bests from before it, then learn from it.
+      const hse = sets.reduce((s, set) => s + model.setHse(ex.id, unit, set), 0);
+      for (const set of sets) model.observe(ex.id, unit, set);
+      if (!hse) continue;
+      add(musclesFor(ex), hse);
+      day.trainingHse += hse;
+      day.axes[axisFor(undefined, unit)] += hse;
+    }
+    out[date] = day;
+  }
+  if (!cache.has(logs)) cache.set(logs, new WeakMap());
+  cache.get(logs)!.set(templates, out);
+  return out;
+}
+
+/** HSE per muscle for one day. */
+export const logMuscleLoad = (logs: Logs, templates: Template[], date: DateStr) => dayLoads(logs, templates)[date]?.muscles ?? {};
 
 /** When a session happened. v1 logs have no time, so assume early evening. */
 function sessionTime(date: string, log: DailyLog): number {
@@ -118,51 +238,34 @@ function sessionTime(date: string, log: DailyLog): number {
   return d.getTime();
 }
 
-/** Raw work units per muscle for one day's log. */
-export function logMuscleLoad(log: DailyLog, templates: Template[]): Partial<Record<Muscle, number>> {
-  const out: Partial<Record<Muscle, number>> = {};
-  const add = (weights: MuscleWeights, units: number) => {
-    if (!units) return;
-    for (const [m, w] of Object.entries(weights) as [Muscle, number][]) out[m] = (out[m] ?? 0) + units * w;
-  };
-  for (const task of log.dailyQuest?.tasks ?? []) {
-    add(musclesFor(task), questTaskLoad(task, log.questProgress?.[task.id]));
-  }
-  const tpl = templates.find((t) => t.id === log.templateId);
-  for (const ex of tpl?.exercises ?? []) {
-    const units = (log.exLogs?.[ex.id]?.sets ?? []).reduce((s, set) => s + setLoad(String(ex.unit), set), 0);
-    add(musclesFor(ex), units);
-  }
-  return out;
-}
-
 /**
- * Load at which a muscle reads ~63% fatigued. Tuned so one daily quest reads "worked"
- * (~25–35%), a full gym session on a muscle "strained", and several hard days in a row
- * without rest "overloaded".
+ * HSE at which a muscle reads ~63% fatigued. About six hard sets in one session is a
+ * full day's work for a muscle; trained people tolerate a bit more.
  */
-const CAPACITY = 40;
+export const muscleCapacity = (tier = 0) => 6 * (1 + 0.08 * tier);
 /** Ignore sessions older than this; their contribution has decayed to noise. */
 const LOOKBACK_DAYS = 10;
 
 /**
  * Current fatigue per muscle, 0–100. Each session's load decays exponentially with the
- * muscle's half-life, then saturates so one huge session can't exceed 100%.
+ * muscle's half-life (big muscles ~30 h, so a hard leg day is ~80% recovered after
+ * 72 h), then saturates so one huge session can't exceed 100%.
  */
-export function muscleFatigue(logs: Logs, templates: Template[], now: Date = new Date()): Record<Muscle, number> {
+export function muscleFatigue(logs: Logs, templates: Template[], now: Date = new Date(), tier = 0): Record<Muscle, number> {
   const nowMs = now.getTime();
+  const loads = dayLoads(logs, templates);
   const acc = Object.fromEntries(MUSCLE_IDS.map((m) => [m, 0])) as Record<Muscle, number>;
   for (const [date, log] of Object.entries(logs)) {
-    const t = sessionTime(date, log);
-    const hours = (nowMs - t) / 3_600_000;
+    const hours = (nowMs - sessionTime(date, log)) / 3_600_000;
     if (hours < 0 || hours > LOOKBACK_DAYS * 24) continue;
-    const load = logMuscleLoad(log, templates);
+    const load = loads[date]?.muscles ?? {};
     for (const info of MUSCLES) {
       const l = load[info.id];
       if (l) acc[info.id] += l * 0.5 ** (hours / info.halfLife);
     }
   }
-  for (const m of MUSCLE_IDS) acc[m] = Math.round(100 * (1 - Math.exp(-acc[m] / CAPACITY)));
+  const cap = muscleCapacity(tier);
+  for (const m of MUSCLE_IDS) acc[m] = Math.round(100 * (1 - Math.exp(-acc[m] / cap)));
   return acc;
 }
 

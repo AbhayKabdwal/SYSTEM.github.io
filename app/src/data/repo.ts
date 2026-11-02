@@ -65,7 +65,7 @@ export function createRepo(db: SystemDB = defaultDb) {
       const row = await db.logs.get(date);
       await db.transaction('rw', db.logs, db.photos, async () => {
         await db.logs.delete(date);
-        const ids = (row?.log.photoIds ?? []).filter((x): x is string => !!x);
+        const ids = [...(row?.log.photoIds ?? []), row?.log.proof?.photoId].filter((x): x is string => !!x);
         if (ids.length) await db.photos.bulkDelete(ids);
       });
     },

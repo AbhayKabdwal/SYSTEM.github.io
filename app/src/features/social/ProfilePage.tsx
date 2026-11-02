@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { RANK_GATES } from '../../domain';
 import { block, follow, followCounts, followingIds, profileByHandle, unfollow, type Profile } from '../../cloud/social';
 import { useSession } from '../../state/session';
 import { Card, ErrorText, Sec } from '../../ui/components';
@@ -84,6 +85,16 @@ export function ProfilePage() {
           <p className="prose" style={{ marginTop: 10 }}>
             {profile.bio}
           </p>
+        )}
+        {profile.stats && (
+          <div className="profile-stats">
+            <span className="rank-badge-sm" style={{ color: RANK_GATES.find((g) => g.rank === profile.stats!.rank)?.color }}>
+              {profile.stats.rank}
+            </span>
+            <span>LVL {profile.stats.level}</span>
+            <span>🔥 {profile.stats.streak}</span>
+            <span>+{profile.stats.weekExp.toLocaleString()} EXP this week</span>
+          </div>
         )}
         <div className="stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 12 }}>
           <div className="stat-card">

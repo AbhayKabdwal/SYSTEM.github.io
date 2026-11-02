@@ -1,18 +1,37 @@
-import { addDays, isComplete, parseDateStr, questForDate, weekOf } from '../../domain';
+import { useMemo } from 'react';
+import { addDays, dailyQuest, parseDateStr, questForDate, weekOf, type Quest, type Tier } from '../../domain';
 import { useApp } from '../../state/store';
 import { Card, Sec } from '../../ui/components';
-import { fmtDate, useToday } from '../../ui/hooks';
+import { fmtDate, useLedger, useToday } from '../../ui/hooks';
+import { DAY_MARK } from '../status/StatusPage';
 
 const DAYS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
 export function PlanPage() {
-  const { logs, questPool } = useApp();
+  const { logs, questPool, player } = useApp();
+  const ledger = useLedger();
   const today = useToday();
   const week = weekOf(today);
   const lastWeek = weekOf(addDays(today, -7));
-  const upcoming = Array.from({ length: 7 }, (_, i) => addDays(today, i + 1));
-  const clearedThisWeek = week.filter((d) => isComplete(logs[d])).length;
-  const clearedLastWeek = lastWeek.filter((d) => isComplete(logs[d])).length;
+  const cleared = (d: string) => ['verified', 'unverified'].includes(ledger.days[d]?.status ?? '');
+  const clearedThisWeek = week.filter(cleared).length;
+  const clearedLastWeek = lastWeek.filter(cleared).length;
+  const prefs = player?.prefs;
+
+  // Each generated day rotates away from the one before, so chain the forecast.
+  const upcoming = useMemo(() => {
+    const out: { date: string; quest: Quest }[] = [];
+    let prev: Quest | undefined = logs[today]?.dailyQuest;
+    for (let i = 1; i <= 7; i++) {
+      const date = addDays(today, i);
+      const quest = prefs
+        ? dailyQuest(date, { tier: ledger.tier as Tier, progress: ledger.rankProgress, prefs, yesterday: prev })
+        : questForDate(date, { today, pool: questPool, logs });
+      out.push({ date, quest });
+      prev = quest;
+    }
+    return out;
+  }, [logs, today, prefs, ledger.tier, ledger.rankProgress, questPool]);
 
   return (
     <div className="page">
@@ -20,14 +39,14 @@ export function PlanPage() {
         <Sec>THIS WEEK</Sec>
         <div className="week-grid">
           {week.map((d) => {
-            const done = isComplete(logs[d]);
-            const missed = d < today && !done;
+            const st = d > today ? 'future' : (ledger.days[d]?.status ?? 'future');
+            const mark = DAY_MARK[st];
             return (
-              <div key={d} className={`week-cell${done ? ' done' : missed ? ' miss' : ''}${d === today ? ' today' : ''}`}>
+              <div key={d} className={`week-cell${cleared(d) ? ' done' : st === 'missed' ? ' miss' : ''}${d === today ? ' today' : ''}`}>
                 <div className="week-day">{DAYS[(parseDateStr(d).getDay() + 6) % 7]}</div>
                 <div className="week-date">{d.slice(8)}</div>
-                <div style={{ marginTop: 4, fontSize: 13 }} aria-label={done ? 'cleared' : missed ? 'missed' : 'open'}>
-                  {done ? '✓' : missed ? '✗' : '·'}
+                <div style={{ marginTop: 4, fontSize: 13, color: mark.color }} aria-label={mark.label || 'upcoming'}>
+                  {mark.icon || '·'}
                 </div>
               </div>
             );
@@ -46,10 +65,9 @@ export function PlanPage() {
       <Card>
         <Sec>UPCOMING GATES</Sec>
         <p className="hint" style={{ marginTop: -4, marginBottom: 8 }}>
-          Quests are fixed per date. A missed day turns the next one into a penalty quest.
+          Forecast at your current rank. A missed day turns the next one into a penalty quest, and ranking up changes the exercises.
         </p>
-        {upcoming.map((d) => {
-          const q = questForDate(d, { today, pool: questPool, logs });
+        {upcoming.map(({ date: d, quest: q }) => {
           return (
             <div key={d} className="kv" style={{ display: 'block' }}>
               <div className="label" style={{ marginBottom: 3 }}>

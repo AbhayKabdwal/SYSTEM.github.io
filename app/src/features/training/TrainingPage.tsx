@@ -1,5 +1,21 @@
 import { useState } from 'react';
-import { guessMuscles, MUSCLES, musclesFor, type Exercise, type Muscle, type MuscleWeights, type QuestTask, type Template } from '../../domain';
+import { Link } from 'react-router-dom';
+import {
+  fits,
+  guessMuscles,
+  libraryFor,
+  MUSCLES,
+  musclesFor,
+  PATTERN_LABEL,
+  QUEST_PATTERNS,
+  TIERS,
+  type Exercise,
+  type Muscle,
+  type MuscleWeights,
+  type Preferences,
+  type QuestTask,
+  type Template,
+} from '../../domain';
 import { useApp } from '../../state/store';
 import { uid } from '../../data/repo';
 import { Card, Dialog, ErrorText, Sec } from '../../ui/components';
@@ -17,8 +33,54 @@ const QUEST_UNITS = ['reps', 'sec', 'min', 'km'];
 const COLORS = ['#ff4455', '#4488ff', '#44ffaa', '#aa44ff', '#ffaa44', '#ffdd44', '#00c8ff', '#ffd700', '#ff66cc'];
 const MIN_POOL = 3;
 
+/** Toggle library exercises in or out of the calibrated quest pool. */
+function LibraryPool({ prefs, onChange }: { prefs: Preferences; onChange: (pool: string[]) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const on = new Set(prefs.pool);
+  const toggle = (id: string) => {
+    const next = on.has(id) ? prefs.pool.filter((x) => x !== id) : [...prefs.pool, id];
+    void onChange(next).then(() => toast(on.has(id) ? 'REMOVED FROM POOL' : 'ADDED TO POOL'));
+  };
+  return (
+    <Card>
+      <Sec>DAILY QUEST POOL</Sec>
+      <p className="hint" style={{ marginTop: -4, marginBottom: 8 }}>
+        {prefs.pool.length} exercises from your calibration. Quests pick the variation that matches your rank, so keep a few per pattern.
+      </p>
+      <div className="btn-row">
+        <button className="btn btn-sm" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          {open ? 'HIDE EXERCISES' : 'CHOOSE EXERCISES'}
+        </button>
+        <Link className="btn btn-sm" to="/calibrate">
+          RECALIBRATE
+        </Link>
+      </div>
+      {open &&
+        QUEST_PATTERNS.map((p) => (
+          <div key={p} style={{ marginTop: 12 }}>
+            <div className="label">{PATTERN_LABEL[p].toUpperCase()}</div>
+            {libraryFor(p).map((e) => {
+              const usable = fits(e, prefs);
+              return (
+                <label key={e.id} className={`pool-row${usable ? '' : ' muted'}`}>
+                  <input type="checkbox" checked={on.has(e.id)} disabled={!usable && !on.has(e.id)} onChange={() => toggle(e.id)} />
+                  <span style={{ flex: 1 }}>{e.name}</span>
+                  <span className="tier-range">
+                    {TIERS[e.tiers[0]]}
+                    {e.tiers[1] !== e.tiers[0] ? `–${TIERS[e.tiers[1]]}` : ''}
+                  </span>
+                  {!usable && <span className="hint">{e.equip ? 'equipment' : 'limitation'}</span>}
+                </label>
+              );
+            })}
+          </div>
+        ))}
+    </Card>
+  );
+}
+
 export function TrainingPage() {
-  const { templates, questPool, logs, setTemplates, setQuestPool } = useApp();
+  const { templates, questPool, logs, player, setPlayer, setTemplates, setQuestPool } = useApp();
   const [editing, setEditing] = useState<Template | null>(null);
   const [poolOpen, setPoolOpen] = useState(false);
 
@@ -45,10 +107,16 @@ export function TrainingPage() {
         </button>
       </Card>
 
+      {player?.prefs ? (
+        <LibraryPool
+          prefs={player.prefs}
+          onChange={(pool) => setPlayer({ ...player, prefs: { ...player.prefs!, pool } })}
+        />
+      ) : (
       <Card>
         <Sec>DAILY QUEST POOL</Sec>
         <p className="hint" style={{ marginTop: -4, marginBottom: 8 }}>
-          Each day's random gate draws 3 tasks from this pool.
+          Each day's random gate draws 3 tasks from this pool. <Link to="/calibrate">Calibrate</Link> to get rank-scaled quests instead.
         </p>
         {questPool.map((q) => (
           <div key={q.id} className="kv">
@@ -62,6 +130,7 @@ export function TrainingPage() {
           EDIT POOL
         </button>
       </Card>
+      )}
 
       {editing && (
         <TemplateEditor

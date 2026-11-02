@@ -1,14 +1,15 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { addDays, dayExp, isComplete, logMuscleLoad, MUSCLES, streakBefore, type ExerciseSet } from '../../domain';
+import { addDays, logMuscleLoad, MUSCLES, type ExerciseSet } from '../../domain';
 import { useApp } from '../../state/store';
 import { Card, Sec } from '../../ui/components';
-import { fmtDate, usePhotoUrl, useToday } from '../../ui/hooks';
+import { fmtDate, useLedger, usePhotoUrl, useToday } from '../../ui/hooks';
+import { DAY_MARK } from '../status/StatusPage';
 import { toast } from '../../ui/notify';
 import { EDIT_WINDOW_DAYS } from '../daily/QuestPage';
 
 export function ArchivesPage() {
   const { logs, templates } = useApp();
-  const today = useToday();
+  const ledger = useLedger();
   const dates = Object.keys(logs).sort((a, b) => b.localeCompare(a));
   return (
     <div className="page">
@@ -26,7 +27,9 @@ export function ArchivesPage() {
         const log = logs[d]!;
         const tpl = templates.find((t) => t.id === log.templateId);
         const exCount = Object.values(log.exLogs ?? {}).filter((e) => e.sets?.length).length;
-        const photos = (log.photoIds ?? []).filter(Boolean).length;
+        const photos = (log.photoIds ?? []).filter(Boolean).length + (log.proof ? 1 : 0);
+        const day = ledger.days[d];
+        const mark = DAY_MARK[day?.status ?? 'missed'];
         return (
           <Link key={d} to={`/archives/${d}`} className="list-item">
             <span className="dot" style={{ background: tpl?.color ?? 'var(--glow)' }} />
@@ -38,8 +41,14 @@ export function ArchivesPage() {
                 {photos ? ` · 📷 ${photos}` : ''}
               </div>
             </div>
-            <span style={{ color: isComplete(log) ? 'var(--grn)' : d === today ? 'var(--glow)' : 'var(--gold)', fontFamily: 'var(--hd)', fontSize: 11 }}>
-              {isComplete(log) ? 'CLEARED' : d === today ? 'IN PROGRESS' : 'MISSED'}
+            <span style={{ color: mark.color, fontFamily: 'var(--hd)', fontSize: 11, textAlign: 'right' }}>
+              {mark.icon} {day?.status === 'open' ? 'IN PROGRESS' : (day?.status ?? 'missed').toUpperCase()}
+              {day && day.total !== 0 && (
+                <div className="muted" style={{ fontSize: 10, marginTop: 2 }}>
+                  {day.total > 0 ? '+' : ''}
+                  {day.total} EXP
+                </div>
+              )}
             </span>
           </Link>
         );
@@ -70,6 +79,7 @@ export function ArchiveDetail() {
   const { logs, templates, deleteLog } = useApp();
   const navigate = useNavigate();
   const today = useToday();
+  const ledger = useLedger();
   const log = logs[date];
   if (!log) {
     return (
@@ -84,8 +94,8 @@ export function ArchiveDetail() {
     );
   }
   const tpl = templates.find((t) => t.id === log.templateId);
-  const exp = dayExp(log, templates, streakBefore(logs, date));
-  const load = logMuscleLoad(log, templates);
+  const day = ledger.days[date];
+  const load = logMuscleLoad(logs, templates, date);
   const worked = MUSCLES.filter((m) => (load[m.id] ?? 0) > 0).sort((a, b) => (load[b.id] ?? 0) - (load[a.id] ?? 0));
   const editable = date >= addDays(today, -EDIT_WINDOW_DAYS);
 
@@ -120,14 +130,63 @@ export function ArchiveDetail() {
           <span>Creatine</span>
           <span>{log.recovery?.creatine ? '✓' : '—'}</span>
         </div>
-        <div className="kv">
-          <span>EXP earned</span>
-          <span>
-            {exp.total}
-            {exp.total ? ` (quest ${exp.quest + exp.penalty}, training ${exp.training}, streak ${exp.streak})` : ''}
-          </span>
-        </div>
+        {day && (
+          <>
+            <div className="kv">
+              <span>Result</span>
+              <span style={{ color: DAY_MARK[day.status].color }}>
+                {DAY_MARK[day.status].icon} {DAY_MARK[day.status].label}
+                {day.restored ? ' · streak restored' : ''}
+              </span>
+            </div>
+            <div className="kv">
+              <span>EXP</span>
+              <span>
+                {day.total > 0 ? '+' : ''}
+                {day.total}
+              </span>
+            </div>
+            <div className="exp-breakdown">
+              {day.quest > 0 && <span>quest {day.quest}</span>}
+              {day.training > 0 && <span>training {day.training}</span>}
+              {day.mult > 1 && <span>×{day.mult.toFixed(2)} streak</span>}
+              {day.side > 0 && <span>side quests {day.side}</span>}
+              {day.bonus > 0 && <span>bonus {day.bonus}</span>}
+              {day.penalty > 0 && <span className="neg">penalty −{day.penalty}</span>}
+            </div>
+            <div className="kv">
+              <span>Streak after this day</span>
+              <span>{day.streak}</span>
+            </div>
+          </>
+        )}
       </Card>
+
+      {log.side &&
+        Object.entries(log.side).map(([k, sq]) => (
+          <Card key={k}>
+            <Sec>{k === 'trial' ? 'RANK-UP TRIAL' : 'INSTANT DUNGEON'}</Sec>
+            <div className="label">{sq!.quest.name}</div>
+            {sq!.quest.tasks.map((t) => {
+              const v = Number(sq!.progress[t.id] ?? 0);
+              return (
+                <div key={t.id} className="kv">
+                  <span style={{ color: v >= t.target ? 'var(--grn)' : undefined }}>{t.label}</span>
+                  <span>
+                    {v} / {t.target} {t.unit}
+                  </span>
+                </div>
+              );
+            })}
+          </Card>
+        ))}
+
+      {log.proof && (
+        <Card>
+          <Sec>PROOF OF WORKOUT</Sec>
+          <Photo id={log.proof.photoId} label={log.proof.visibility.toUpperCase()} />
+        </Card>
+      )}
 
       {tpl && (
         <Card>
@@ -155,7 +214,7 @@ export function ArchiveDetail() {
           {worked.map((m) => (
             <div key={m.id} className="kv">
               <span>{m.label}</span>
-              <span>{(load[m.id] ?? 0).toFixed(1)} units</span>
+              <span>{(load[m.id] ?? 0).toFixed(1)} hard sets</span>
             </div>
           ))}
         </Card>

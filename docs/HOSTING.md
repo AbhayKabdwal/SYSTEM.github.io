@@ -73,9 +73,12 @@ npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
 ```
 
-The project ref is the `xxxx` in `https://xxxx.supabase.co`. `db push` applies `supabase/migrations/20261102000000_init.sql`.
+The project ref is the `xxxx` in `https://xxxx.supabase.co`. `db push` applies every file in `supabase/migrations/` in order:
 
-**No CLI?** Open the dashboard → **SQL Editor**, paste the contents of that migration file and run it once.
+- `20261102000000_init.sql`: profiles, encrypted vaults, follows, feats, likes, blocks, reports.
+- `20261103000000_media_and_stats.sql`: the private `feat-media` storage bucket for Followers/Global photos (1 MB limit, JPEG/WebP only) and opt-in leaderboard stats.
+
+**No CLI?** Open the dashboard → **SQL Editor**, paste each migration file in order and run it once.
 
 ### 3. Test the security rules (recommended)
 
@@ -89,7 +92,7 @@ npx supabase start
 npx supabase test db
 ```
 
-All 16 checks should pass. Stop the local stack with `npx supabase stop`.
+All 23 checks should pass. Stop the local stack with `npx supabase stop`.
 
 ### 4. Configure auth
 
@@ -159,11 +162,14 @@ NODE_OPTIONS=--experimental-global-webcrypto npm run build
 
 ## Running it day to day
 
-- **Reports:** dashboard → **Table Editor → reports**. To remove an abusive feat, delete its row in `feats`. To ban someone, go to **Authentication → Users** and delete or ban the user; their data cascades away.
+- **Reports:** dashboard → **Table Editor → reports**. To remove an abusive feat, delete its row in `feats`, then delete its photo (the `image_path` column) under **Storage → feat-media**. To ban someone, go to **Authentication → Users** and delete or ban the user; their data cascades away.
 - **Backups:** synced vaults are end-to-end encrypted, so a database backup alone can't restore anyone's logs without their passphrase. Encourage users to keep their recovery code and use **Data Vault → Export** now and then.
 - **Lost passphrase *and* recovery code:** nobody, including you, can decrypt that user's synced data. That's the privacy guarantee working as designed. Their local device copy is unaffected.
 - **Schema changes:** add a new file in `supabase/migrations/`, then run `npx supabase db push`. Never edit a migration that has already been applied.
 - **Custom domain (optional):** Settings → Pages → Custom domain. Then update the Supabase Site URL and Redirect URLs to the new domain. Users' local data is per-origin, so tell them to **Export** before you switch and **Import** after (or sign in to sync).
+
+- **Storage use:** photos are compressed to ~100–250 KB each. The free tier includes 1 GB of storage, roughly 5,000 shared photos. Photos of deleted accounts stay in the bucket; clear `feat-media/<user id>/` by hand if you need the space.
+- **Leaderboard honesty:** stats are reported by each player's app, so a determined user can fake them. Treat the leaderboard as a game, not a record.
 
 ## Troubleshooting
 
@@ -175,4 +181,5 @@ NODE_OPTIONS=--experimental-global-webcrypto npm run build
 | Confirmation email never arrives | Custom SMTP isn't set up (see Part 2, step 4). |
 | "redirect URL not allowed" after clicking an email link | Add the exact site URL, with the trailing slash, to Redirect URLs. |
 | Sync says "Network error" | The Supabase project may be paused. Restore it in the dashboard. |
+| Photo feats fail with "Bucket not found" | The second migration hasn't been applied. Run `npx supabase db push`. |
 | "This device holds another account's data" | Someone else's data is on this browser. Export it if needed, then Data Vault → Erase device data before syncing a different account. |

@@ -1,31 +1,47 @@
 import type { AchievementKind } from '../domain';
 import { requireClient } from './client';
 
+export interface PublicStats {
+  level: number;
+  rank: string;
+  streak: number;
+  weekExp: number;
+  /** Monday of the week `weekExp` is for. */
+  week: string;
+}
+
 export interface Profile {
   id: string;
   handle: string;
   display_name: string;
   bio: string;
   created_at: string;
+  stats: PublicStats | null;
 }
 
+/** Server-side visibility. "Private" photos never get this far. */
 export type Visibility = 'public' | 'followers';
 
 export interface Feat {
   id: string;
   user_id: string;
-  kind: AchievementKind | 'custom';
+  kind: AchievementKind | 'custom' | 'proof';
   title: string;
   body: string;
   visibility: Visibility;
   created_at: string;
+  image_path: string | null;
+  /** Short-lived signed URL for the photo, if any. */
+  imageUrl: string | null;
   author: Pick<Profile, 'id' | 'handle' | 'display_name'>;
   likeCount: number;
   likedByMe: boolean;
 }
 
 const PAGE = 20;
-const PROFILE_COLS = 'id, handle, display_name, bio, created_at';
+const PROFILE_COLS = 'id, handle, display_name, bio, created_at, stats';
+const BUCKET = 'feat-media';
+const SIGNED_URL_SECONDS = 60 * 60;
 
 export async function myProfile(userId: string): Promise<Profile | null> {
   const { data, error } = await requireClient().from('profiles').select(PROFILE_COLS).eq('id', userId).maybeSingle();
@@ -105,14 +121,58 @@ export async function report(me: string, target: { featId?: string; userId?: str
   if (error) throw error;
 }
 
-export async function postFeat(me: string, feat: { kind: Feat['kind']; title: string; body: string; visibility: Visibility }) {
-  const { error } = await requireClient().from('feats').insert({ user_id: me, ...feat });
+/**
+ * Posts a feat. With an image, the photo is uploaded first into the poster's own
+ * folder; if the feat insert then fails, the orphaned photo is removed again.
+ */
+export async function postFeat(
+  me: string,
+  feat: { kind: Feat['kind']; title: string; body: string; visibility: Visibility },
+  image?: Blob,
+): Promise<string> {
+  const sb = requireClient();
+  let image_path: string | null = null;
+  if (image) {
+    image_path = `${me}/${crypto.randomUUID()}.jpg`;
+    const { error: upErr } = await sb.storage.from(BUCKET).upload(image_path, image, { contentType: 'image/jpeg', upsert: false });
+    if (upErr) throw upErr;
+  }
+  const { data, error } = await sb.from('feats').insert({ user_id: me, ...feat, image_path }).select('id').single();
+  if (error) {
+    if (image_path) await sb.storage.from(BUCKET).remove([image_path]);
+    throw error;
+  }
+  return data.id as string;
+}
+
+export async function deleteFeat(id: string, imagePath?: string | null) {
+  const sb = requireClient();
+  const { error } = await sb.from('feats').delete().eq('id', id);
+  if (error) throw error;
+  if (imagePath) await sb.storage.from(BUCKET).remove([imagePath]);
+}
+
+/** Publishes (or with null, withdraws) leaderboard stats on your profile. */
+export async function publishStats(me: string, stats: PublicStats | null) {
+  const { error } = await requireClient().from('profiles').update({ stats }).eq('id', me);
   if (error) throw error;
 }
 
-export async function deleteFeat(id: string) {
-  const { error } = await requireClient().from('feats').delete().eq('id', id);
+export type BoardScope = { kind: 'following'; ids: string[] } | { kind: 'global' };
+
+/** Weekly EXP leaderboard among hunters who share stats. */
+export async function leaderboard(scope: BoardScope, week: string): Promise<Profile[]> {
+  let q = requireClient()
+    .from('profiles')
+    .select(PROFILE_COLS)
+    .not('stats', 'is', null)
+    .eq('stats->>week', week)
+    .order('stats->weekExp', { ascending: false })
+    .limit(50);
+  if (scope.kind === 'following') q = q.in('id', scope.ids);
+  const { data, error } = await q;
   if (error) throw error;
+  return (data ?? []) as Profile[];
 }
 
 export type FeedScope = { kind: 'following'; me: string; following: string[] } | { kind: 'explore' } | { kind: 'user'; userId: string };
@@ -122,7 +182,7 @@ export async function feed(me: string, scope: FeedScope, before?: string): Promi
   const sb = requireClient();
   let q = sb
     .from('feats')
-    .select('id, user_id, kind, title, body, visibility, created_at, author:profiles!feats_user_id_fkey(id, handle, display_name), likes(count)')
+    .select('id, user_id, kind, title, body, visibility, created_at, image_path, author:profiles!feats_user_id_fkey(id, handle, display_name), likes(count)')
     .order('created_at', { ascending: false })
     .limit(PAGE);
   if (before) q = q.lt('created_at', before);
@@ -131,7 +191,7 @@ export async function feed(me: string, scope: FeedScope, before?: string): Promi
   if (scope.kind === 'user') q = q.eq('user_id', scope.userId);
   const { data, error } = await q;
   if (error) throw error;
-  const rows = (data ?? []) as unknown as (Omit<Feat, 'likeCount' | 'likedByMe' | 'author'> & {
+  const rows = (data ?? []) as unknown as (Omit<Feat, 'likeCount' | 'likedByMe' | 'author' | 'imageUrl'> & {
     author: Feat['author'] | null;
     likes: { count: number }[];
   })[];
@@ -141,9 +201,21 @@ export async function feed(me: string, scope: FeedScope, before?: string): Promi
     const { data: liked } = await sb.from('likes').select('feat_id').eq('user_id', me).in('feat_id', ids);
     for (const l of liked ?? []) mine.add(l.feat_id as string);
   }
+  const paths = rows.map((r) => r.image_path).filter((p): p is string => !!p);
+  const urls = new Map<string, string>();
+  if (paths.length) {
+    const { data: signed } = await sb.storage.from(BUCKET).createSignedUrls(paths, SIGNED_URL_SECONDS);
+    for (const s of signed ?? []) if (s.path && s.signedUrl) urls.set(s.path, s.signedUrl);
+  }
   return rows
     .filter((r) => r.author)
-    .map(({ likes, author, ...r }) => ({ ...r, author: author!, likeCount: likes[0]?.count ?? 0, likedByMe: mine.has(r.id) }));
+    .map(({ likes, author, ...r }) => ({
+      ...r,
+      author: author!,
+      imageUrl: r.image_path ? (urls.get(r.image_path) ?? null) : null,
+      likeCount: likes[0]?.count ?? 0,
+      likedByMe: mine.has(r.id),
+    }));
 }
 
 export async function like(me: string, featId: string) {

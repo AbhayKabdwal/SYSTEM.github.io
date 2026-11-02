@@ -1,7 +1,7 @@
 -- Row-level security checks. Run with: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(16);
+select plan(23);
 
 -- Three users via the sign-up trigger.
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -54,8 +54,32 @@ select throws_ok(
   $$ insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000a') $$,
   null, 'cannot re-follow across a block');
 
+-- Carol: photo feats. Uploads only into her own folder; photo visibility follows the feat.
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+insert into storage.objects (bucket_id, name, owner)
+values ('feat-media', '00000000-0000-0000-0000-00000000000c/11111111-1111-1111-1111-111111111111.jpg', '00000000-0000-0000-0000-00000000000c');
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('feat-media', '00000000-0000-0000-0000-00000000000a/22222222-2222-2222-2222-222222222222.jpg') $$,
+  null, 'cannot upload into someone else''s folder');
+select throws_ok(
+  $$ insert into public.feats (user_id, kind, title, image_path) values ('00000000-0000-0000-0000-00000000000c', 'proof', 'x', '00000000-0000-0000-0000-00000000000a/33333333-3333-3333-3333-333333333333.jpg') $$,
+  null, 'feat cannot point at another user''s photo');
+insert into public.feats (user_id, kind, title, visibility, image_path)
+values ('00000000-0000-0000-0000-00000000000c', 'proof', 'proof feat', 'followers', '00000000-0000-0000-0000-00000000000c/11111111-1111-1111-1111-111111111111.jpg');
+select throws_ok(
+  $$ update public.profiles set stats = '{"level": 5, "rank": "Z", "streak": 1, "weekExp": 10, "week": "2026-11-02"}' where id = '00000000-0000-0000-0000-00000000000c' $$,
+  null, 'stats must be well-formed');
+update public.profiles set stats = '{"level": 5, "rank": "E", "streak": 3, "weekExp": 420, "week": "2026-11-02"}' where id = '00000000-0000-0000-0000-00000000000c';
+
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 0, 'non-follower cannot read a followers-only photo');
+insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c');
+select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 1, 'follower can read the photo');
+select is((select (stats ->> 'weekExp')::int from public.profiles where handle = 'carol'), 420, 'shared stats are visible');
+
 -- Anonymous visitors see nothing.
 select set_config('role', 'anon', true);
+select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 0, 'anon sees no photos');
 select is((select count(*)::int from public.feats), 0, 'anon sees no feats');
 select is((select count(*)::int from public.profiles), 0, 'anon sees no profiles');
 
