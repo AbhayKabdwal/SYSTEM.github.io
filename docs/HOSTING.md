@@ -1,0 +1,178 @@
+# Hosting SYSTEM
+
+The app has two parts:
+
+| Part | What it is | Where it runs | Cost |
+|---|---|---|---|
+| Frontend | Static React PWA (`app/`) | GitHub Pages, built by GitHub Actions | Free |
+| Backend (optional) | Postgres + auth + row-level security (`supabase/`) | Supabase | Free tier |
+
+Without the backend the app still works fully: logs, muscle map, EXP, backups. It just has no accounts, sync or Hunters network. You can ship the frontend first and add the backend later.
+
+Your site will be at **https://abhaykabdwal.github.io/SYSTEM.github.io/**
+
+---
+
+## Part 1 — Frontend on GitHub Pages
+
+### 1. Switch Pages to GitHub Actions (do this before pushing)
+
+GitHub → repository → **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+
+The old setup served `index.html` straight from the branch. That file now lives in `legacy/`, so if Pages is still on "Deploy from a branch" the site will show the README instead of the app.
+
+### 2. Push
+
+```bash
+git push origin main
+```
+
+The **Test and deploy** workflow (`.github/workflows/deploy.yml`) runs lint, typecheck, tests and the build, then deploys `app/dist`. Watch it under the **Actions** tab. It takes about 2 minutes.
+
+### 3. Check it
+
+Open the site on your phone.
+
+- **Existing v1 users:** the new app is on the same origin, so on first launch it copies the old `localStorage` data into the new storage automatically. The old data is left in place, untouched.
+- **Installed v1 PWAs:** the new service worker has the same filename (`sw.js`), so the browser replaces the old, never-updating one. If a phone still shows the old app, close every SYSTEM tab or window and reopen it.
+- **Install:** Android Chrome → menu → *Install app*. iPhone Safari → Share → *Add to Home Screen*.
+
+Every later push to `main` redeploys. Pull requests run the checks without deploying.
+
+---
+
+## Part 2 — Backend on Supabase (accounts, encrypted sync, Hunters)
+
+### 1. Create the project
+
+1. Sign up at supabase.com → **New project**.
+2. **Region:** pick the one closest to your users (Mumbai `ap-south-1` for India).
+3. **Database password:** generate a strong one and store it in your password manager. You'll need it for `db push`.
+
+> Free-tier projects **pause after 7 days without activity**. A paused project means sign-in and sync fail until you press *Restore* in the dashboard. Local data is unaffected. Upgrade, or keep it in use, if others depend on it.
+
+### 2. Apply the database schema
+
+You need Node 20+ locally for the Supabase CLI.
+
+```bash
+npx supabase init
+```
+
+Answer **N** to the editor-settings prompts. This creates `supabase/config.toml` next to the existing `migrations/` folder. Then:
+
+```bash
+npx supabase login
+```
+
+```bash
+npx supabase link --project-ref YOUR_PROJECT_REF
+```
+
+```bash
+npx supabase db push
+```
+
+The project ref is the `xxxx` in `https://xxxx.supabase.co`. `db push` applies `supabase/migrations/20261102000000_init.sql`.
+
+**No CLI?** Open the dashboard → **SQL Editor**, paste the contents of that migration file and run it once.
+
+### 3. Test the security rules (recommended)
+
+`supabase/tests/rls_test.sql` checks the rules that protect user data: vaults are private, followers-only feats stay hidden, blocks work, and anonymous visitors see nothing. Running it locally needs Docker:
+
+```bash
+npx supabase start
+```
+
+```bash
+npx supabase test db
+```
+
+All 16 checks should pass. Stop the local stack with `npx supabase stop`.
+
+### 4. Configure auth
+
+Dashboard → **Authentication**:
+
+- **URL Configuration**
+  - *Site URL:* `https://abhaykabdwal.github.io/SYSTEM.github.io/`
+  - *Redirect URLs:* add `https://abhaykabdwal.github.io/SYSTEM.github.io/` and `http://localhost:5173/`.
+
+  Confirmation and password-reset links only work for URLs on this list.
+- **Sign In / Providers → Email**
+  - Keep *Confirm email* **on**.
+  - Set *Minimum password length* to **10**. This matches the app's own check, so the server enforces it too.
+- **Emails → SMTP Settings:** Supabase's built-in email sender is for testing only. It is heavily rate-limited and only delivers to your project team's addresses. Before inviting anyone else, connect a real SMTP provider (Resend, Brevo, Postmark, AWS SES…). Otherwise other people's sign-up and reset emails will never arrive.
+
+### 5. Connect the frontend
+
+Dashboard → **Project Settings → API**. Copy:
+
+- **Project URL**
+- **anon / public** key (or the newer *publishable* key)
+
+Both are designed to be public: they ship to every browser, and the row-level security policies are what protect the data. **Never** use the `service_role` / *secret* key in the app or in GitHub.
+
+GitHub → **Settings → Secrets and variables → Actions → Variables tab → New repository variable**:
+
+| Name | Value |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://xxxx.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | the anon / publishable key |
+
+Then **Actions → Test and deploy → Run workflow** (or push any commit). The rebuilt site shows Account & Sync and Hunters.
+
+### 6. Try the whole flow
+
+1. Phone: **More → Account & Sync → Sign up** → confirm the email → sign in.
+2. **Create vault:** choose a passphrase and **save the recovery code**.
+3. Log a quest.
+4. Laptop: sign in → **Unlock** with the passphrase → the quest appears.
+5. **Hunters → Share a feat**. From a second account, find the first one by handle → Follow → Like.
+
+---
+
+## Local development
+
+```bash
+cd app
+```
+
+```bash
+npm install
+```
+
+```bash
+npm run dev
+```
+
+To develop against Supabase, copy `app/.env.example` to `app/.env.local` and fill in the two values. `.env.local` is git-ignored.
+
+**Node 18:** the app, tests and dev server work, but the production build's service-worker step needs Node 20+. Upgrade Node, or build with:
+
+```bash
+NODE_OPTIONS=--experimental-global-webcrypto npm run build
+```
+
+---
+
+## Running it day to day
+
+- **Reports:** dashboard → **Table Editor → reports**. To remove an abusive feat, delete its row in `feats`. To ban someone, go to **Authentication → Users** and delete or ban the user; their data cascades away.
+- **Backups:** synced vaults are end-to-end encrypted, so a database backup alone can't restore anyone's logs without their passphrase. Encourage users to keep their recovery code and use **Data Vault → Export** now and then.
+- **Lost passphrase *and* recovery code:** nobody, including you, can decrypt that user's synced data. That's the privacy guarantee working as designed. Their local device copy is unaffected.
+- **Schema changes:** add a new file in `supabase/migrations/`, then run `npx supabase db push`. Never edit a migration that has already been applied.
+- **Custom domain (optional):** Settings → Pages → Custom domain. Then update the Supabase Site URL and Redirect URLs to the new domain. Users' local data is per-origin, so tell them to **Export** before you switch and **Import** after (or sign in to sync).
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Site shows the README | Pages source is still "Deploy from a branch". Switch it to GitHub Actions. |
+| Workflow fails at "deploy" | Same cause, or the `github-pages` environment has branch protection that excludes `main`. |
+| No Account / Hunters in the app | The repo variables are missing or misspelled. Re-run the workflow after adding them. |
+| Confirmation email never arrives | Custom SMTP isn't set up (see Part 2, step 4). |
+| "redirect URL not allowed" after clicking an email link | Add the exact site URL, with the trailing slash, to Redirect URLs. |
+| Sync says "Network error" | The Supabase project may be paused. Restore it in the dashboard. |
+| "This device holds another account's data" | Someone else's data is on this browser. Export it if needed, then Data Vault → Erase device data before syncing a different account. |

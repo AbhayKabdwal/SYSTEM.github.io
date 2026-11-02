@@ -19,6 +19,13 @@ describe('getFatigue (v1 compliance metric)', () => {
     expect(getFatigue(logsFrom({ ...old, ...recent }))).toBe(0);
   });
 
+  it("doesn't count today's unfinished quest as a miss", () => {
+    const logs = logsFrom({ '2026-11-01': 'x', '2026-11-02': '-' });
+    expect(getFatigue(logs)).toBe(30);
+    expect(getFatigue(logs, '2026-11-02')).toBe(0);
+    expect(getFatigue(logsFrom({ '2026-11-01': '-', '2026-11-02': '-' }), '2026-11-01')).toBe(60);
+  });
+
   it('bands values', () => {
     expect(fatigueBand(10)).toBe('optimal');
     expect(fatigueBand(25)).toBe('moderate');

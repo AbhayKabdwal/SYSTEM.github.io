@@ -6,3 +6,6 @@ export * from './quests';
 export * from './fatigue';
 export * from './progress';
 export * from './skills';
+export * from './muscles';
+export * from './exp';
+export * from './achievements';

@@ -15,6 +15,7 @@ export default tseslint.config(
       ...reactHooks.configs.recommended.rules,
       // User text must never be rendered as raw HTML (stored XSS once social ships).
       'react/no-danger': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { varsIgnorePattern: '^_', argsIgnorePattern: '^_', destructuredArrayIgnorePattern: '^_' }],
     },
   },
   {

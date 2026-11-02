@@ -1,10 +1,10 @@
 {
   "name": "system-app",
   "private": true,
-  "version": "0.1.0",
+  "version": "2.0.0",
   "type": "module",
   "engines": {
-    "node": ">=18.18"
+    "node": ">=20"
   },
   "scripts": {
     "dev": "vite",
@@ -16,8 +16,15 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@fontsource/orbitron": "^5.1.1",
+    "@fontsource/rajdhani": "^5.1.1",
+    "@supabase/supabase-js": "^2.46.2",
+    "dexie": "^4.0.10",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0",
+    "zod": "^3.23.8",
+    "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -27,10 +34,12 @@
     "eslint": "^9.17.0",
     "eslint-plugin-react": "^7.37.3",
     "eslint-plugin-react-hooks": "^5.1.0",
+    "fake-indexeddb": "^6.0.0",
     "globals": "^15.14.0",
     "typescript": "^5.6.3",
     "typescript-eslint": "^8.18.2",
     "vite": "^5.4.21",
+    "vite-plugin-pwa": "^0.21.1",
     "vitest": "^2.1.9"
   }
 }

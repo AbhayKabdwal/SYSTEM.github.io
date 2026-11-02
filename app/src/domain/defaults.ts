@@ -77,6 +77,15 @@ export const DEFAULT_TEMPLATES: Template[]=[
     {id:'e_pike',name:'Pike Push-ups',unit:'reps'},
     {id:'e_lsit',name:'L-Sit Hold',unit:'sec'},
   ]},
+  // New in v2: "stage" exercises feed the mastery trees. v1 had none, so trees never unlocked.
+  {id:'tpl_skills',name:'CALISTHENICS SKILLS',color:'#ffd700',exercises:[
+    {id:'e_sk_planche',name:'Planche Progression',unit:'stage'},
+    {id:'e_sk_lever',name:'Front Lever Progression',unit:'stage'},
+    {id:'e_sk_muscle',name:'Muscle-up Progression',unit:'stage'},
+    {id:'e_sk_hspu',name:'Handstand / HSPU Progression',unit:'stage'},
+    {id:'e_sk_pistol',name:'Pistol Progression',unit:'stage'},
+    {id:'e_sk_lsit',name:'L-Sit / V-Sit Progression',unit:'stage'},
+  ]},
 ];
 export const SKILL_TREES: SkillTree[]=[
   {id:'planche',name:'PLANCHE',nodes:[

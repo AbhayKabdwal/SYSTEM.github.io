@@ -47,7 +47,7 @@ export interface QuestContext {
 
 export function questForDate(date: DateStr, ctx: QuestContext): Quest {
   const { today, penalty = false, pool = DEFAULT_QUEST_POOL, logs = {} } = ctx;
-  const deload = getFatigue(logs) >= DELOAD_THRESHOLD;
+  const deload = getFatigue(logs, today) >= DELOAD_THRESHOLD;
   if (penalty) return deload ? RECOVERY_QUEST : PENALTY_QUEST;
   if (date === today && deload) return RECOVERY_QUEST;
   return randomGate(date, pool);
