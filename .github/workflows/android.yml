@@ -1,0 +1,89 @@
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write # publishes the APK to the "android-latest" release
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      # Same backend as the website. These are public values; RLS protects the data.
+      VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+      VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      HAS_SIGNING_KEY: ${{ secrets.ANDROID_KEYSTORE_B64 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Copy the web build into the Android project
+        run: npx cap sync android
+
+      - name: Restore signing key
+        if: env.HAS_SIGNING_KEY == 'true'
+        run: echo "${{ secrets.ANDROID_KEYSTORE_B64 }}" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      # Signed with your key, each new APK installs over the previous one and keeps your data.
+      # Without the key it falls back to a debug build signed by a throwaway key: fine to try,
+      # but every build then needs an uninstall first.
+      - name: Build APK
+        working-directory: app/android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_PATH: ${{ env.HAS_SIGNING_KEY == 'true' && format('{0}/release.keystore', runner.temp) || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ "$HAS_SIGNING_KEY" = "true" ]; then
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/SYSTEM.apk"
+          else
+            echo "::warning::No signing key in repo secrets: building a debug APK. See docs/ANDROID.md."
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk "$RUNNER_TEMP/SYSTEM.apk"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SYSTEM-apk
+          path: ${{ runner.temp }}/SYSTEM.apk
+
+      # A fixed download link for your phone: github.com/<you>/<repo>/releases/tag/android-latest
+      - name: Publish to the android-latest release
+        if: env.HAS_SIGNING_KEY == 'true' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-latest >/dev/null 2>&1 || gh release create android-latest --title "SYSTEM for Android" --notes "Latest Android build. Download SYSTEM.apk on your phone and open it to install or update." --prerelease
+          gh release upload android-latest "$RUNNER_TEMP/SYSTEM.apk" --clobber
+          gh release edit android-latest --notes "Latest Android build from ${GITHUB_SHA::7} (run ${{ github.run_number }}). Download SYSTEM.apk on your phone and open it to install or update."

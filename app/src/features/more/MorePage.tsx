@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import { cloudEnabled } from '../../cloud/client';
 import { useSession } from '../../state/session';
 import { Card } from '../../ui/components';
+import { isNative } from '../../native/platform';
+import { RemindersCard } from './RemindersCard';
 
 const ITEMS = [
   { to: '/plan', icon: '◇', title: 'Plan', sub: 'This week and upcoming gates' },
@@ -32,6 +34,7 @@ export function MorePage() {
           </span>
         </Link>
       ))}
+      {isNative && <RemindersCard />}
       <Card>
         <p className="hint">SYSTEM v{__APP_VERSION__} · a fan-made training tracker.</p>
       </Card>

@@ -45,8 +45,15 @@ export function Seg<T extends string>({ value, options, onChange, label }: { val
   );
 }
 
-/** Open dialogs, innermost last: only the top one reacts to Escape. */
+/** Open dialogs, innermost last: only the top one reacts to Escape (or Android's back button). */
 const dialogStack: symbol[] = [];
+
+/** Closes the innermost open dialog. Returns false if none was open. */
+export function closeTopDialog(): boolean {
+  if (!dialogStack.length) return false;
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  return true;
+}
 
 export function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);

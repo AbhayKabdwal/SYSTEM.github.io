@@ -2,7 +2,7 @@
 
 A Solo Leveling–inspired training tracker: daily random-gate quests, penalty and recovery quests, ranks and EXP, calisthenics skill trees, and a muscle fatigue map. Private by default and works offline.
 
-**Hosting and backend setup:** see [docs/HOSTING.md](docs/HOSTING.md).
+**Hosting and backend setup:** see [docs/HOSTING.md](docs/HOSTING.md). **Android app:** see [docs/ANDROID.md](docs/ANDROID.md).
 
 ## Features
 
@@ -32,6 +32,7 @@ The game rules live in `app/src/domain/ledger.ts` (EXP, streaks, penalties, rank
 | `app/src/state/` | App and session stores (zustand) |
 | `app/src/features/` | One folder per screen |
 | `app/src/ui/` | Shared components, theme, hooks |
+| `app/android/`, `app/src/native/` | Android app (Capacitor) and its native features |
 | `supabase/migrations/` | Database schema with row-level security |
 | `supabase/tests/` | pgTAP tests for the security policies |
 | `legacy/` | The original single-file v1 app, kept for reference |

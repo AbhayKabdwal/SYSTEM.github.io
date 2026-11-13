@@ -31,6 +31,7 @@ import { deleteFeat, postFeat } from '../../cloud/social';
 import { createRepo } from '../../data/repo';
 import { Card, Sec, Seg } from '../../ui/components';
 import { compressImage } from '../../ui/image';
+import { choosePhoto } from '../../native/photo';
 import { systemAlert, toast } from '../../ui/notify';
 import { useLedger, usePhotoUrl, useQuestFor, useToday } from '../../ui/hooks';
 
@@ -536,7 +537,7 @@ function PhotoSlot({ id, label, onPick, onRemove }: { id: string | null; label: 
   const input = useRef<HTMLInputElement>(null);
   return (
     <div>
-      <button className="photo-slot" onClick={() => input.current?.click()} aria-label={`${url ? 'Change' : 'Add'} ${label.toLowerCase()} photo`}>
+      <button className="photo-slot" onClick={() => void choosePhoto(input.current, onPick).catch(() => toast('COULD NOT OPEN THE CAMERA'))} aria-label={`${url ? 'Change' : 'Add'} ${label.toLowerCase()} photo`}>
         {url ? <img src={url} alt="" /> : <>📷<span style={{ marginTop: 4 }}>ADD</span></>}
       </button>
       <div className="row" style={{ justifyContent: 'center' }}>
@@ -660,7 +661,9 @@ function ProofCard(props: {
                 ? 'Posted to Hunters with your quest, and kept in your archive.'
                 : 'Kept in your archive. With sync on it is backed up encrypted, so only you can ever open it.'}
           </p>
-          <button className="btn btn-grn" style={{ marginTop: 8 }} disabled={!props.cleared || props.busy} onClick={() => input.current?.click()}>
+          <button className="btn btn-grn" style={{ marginTop: 8 }} disabled={!props.cleared || props.busy}
+            onClick={() => void choosePhoto(input.current, props.onPick, 'camera').catch(() => toast('COULD NOT OPEN THE CAMERA'))}
+          >
             {props.busy ? 'UPLOADING…' : props.cleared ? '📷 ATTACH PROOF' : 'CLEAR ALL TASKS FIRST'}
           </button>
           <input

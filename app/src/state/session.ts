@@ -49,6 +49,8 @@ interface SessionState {
   passwordRecovery: boolean;
   start(): void;
   refreshProfile(): Promise<void>;
+  /** Android: finish sign-in from an auth email's deep link (?code=…). */
+  completeAuthLink(url: string): Promise<void>;
   setupVault(passphrase: string): Promise<string>;
   unlock(passphrase: string): Promise<void>;
   recover(code: string, newPassphrase: string): Promise<string>;
@@ -144,6 +146,20 @@ export const useSession = create<SessionState>((set, get) => {
       document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') void get().syncNow();
       });
+    },
+
+    async completeAuthLink(url) {
+      if (!supabase) return;
+      const params = new URL(url.replace(/^[^:]+:\/\/[^?#]*/, 'https://x/')).searchParams;
+      const hash = new URLSearchParams(url.split('#')[1] ?? '');
+      const err = params.get('error_description') ?? hash.get('error_description');
+      if (err) throw new Error(err.replace(/\+/g, ' '));
+      const code = params.get('code');
+      if (!code) return;
+      const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) throw error;
+      // The PKCE verifier remembers whether this was a password reset.
+      if ((data as { redirectType?: string | null }).redirectType === 'PASSWORD_RECOVERY') set({ passwordRecovery: true });
     },
 
     async refreshProfile() {

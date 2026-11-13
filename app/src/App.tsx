@@ -22,6 +22,7 @@ import { VaultPage } from './features/vault/VaultPage';
 import { PrivacyPage } from './features/privacy/PrivacyPage';
 import { SetupPage } from './features/onboarding/SetupPage';
 import { CalibratePage } from './features/onboarding/CalibratePage';
+import { useReminderScheduler } from './native/useReminders';
 
 const NAV = [
   { to: '/', icon: '◈', label: 'STATUS' },
@@ -122,6 +123,7 @@ function StatsPublisher({ ledger }: { ledger: Ledger }) {
 
 function Shell() {
   const ledger = useLedger();
+  useReminderScheduler(ledger, useToday());
   return (
     <div className={`app${ledger.penaltyToday ? ' penalty-mode' : ''}`}>
       <div className="grid-bg" />

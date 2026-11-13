@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SYSTEM</string>
+    <string name="title_activity_main">SYSTEM</string>
+    <string name="package_name">io.github.abhaykabdwal.system</string>
+    <string name="custom_url_scheme">io.github.abhaykabdwal.system</string>
+</resources>

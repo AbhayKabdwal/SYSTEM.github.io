@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { hapticSuccess } from '../native/haptics';
 
 interface NotifyState {
   toast: string | null;
@@ -19,8 +20,16 @@ export function toast(msg: string) {
 /** Full-screen "SYSTEM NOTIFICATION" for moments that matter. */
 export function systemAlert(msg: string) {
   useNotify.setState({ sys: msg });
+  hapticSuccess();
   clearTimeout(sysTimer);
   sysTimer = setTimeout(() => useNotify.setState({ sys: null }), 4500);
 }
 
 export const dismissSystemAlert = () => useNotify.setState({ sys: null });
+
+/** Closes the system alert if one is showing. Returns false if none was. */
+export function dismissIfShowing(): boolean {
+  if (!useNotify.getState().sys) return false;
+  dismissSystemAlert();
+  return true;
+}

@@ -24,6 +24,7 @@ import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
 import { Card, Dialog, ErrorText, Field, Sec, Seg } from '../../ui/components';
 import { compressImage } from '../../ui/image';
+import { choosePhoto } from '../../native/photo';
 import { timeAgo, useLedger, usePhotoUrl, useToday } from '../../ui/hooks';
 import { toast } from '../../ui/notify';
 
@@ -404,6 +405,17 @@ function Composer({ online, onClose, onPosted }: { online: boolean; onClose: () 
 
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
+  const acceptPhoto = async (f: File | undefined) => {
+    if (!f) return;
+    try {
+      const blob = await compressImage(f);
+      setPhoto(blob);
+      setPreview(URL.createObjectURL(blob));
+    } catch {
+      setError('Could not read that image.');
+    }
+  };
+
   const choose = (a: Achievement | null) => {
     setPicked(a);
     setTitle(a?.title ?? '');
@@ -466,7 +478,7 @@ function Composer({ online, onClose, onPosted }: { online: boolean; onClose: () 
           </button>
         </div>
       ) : (
-        <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => fileRef.current?.click()}>
+        <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => void choosePhoto(fileRef.current, acceptPhoto).catch(() => setError('Could not open the camera.'))}>
           📷 ADD PHOTO
         </button>
       )}
@@ -475,17 +487,10 @@ function Composer({ online, onClose, onPosted }: { online: boolean; onClose: () 
         type="file"
         accept="image/*"
         hidden
-        onChange={async (e) => {
+        onChange={(e) => {
           const f = e.target.files?.[0];
           e.target.value = '';
-          if (!f) return;
-          try {
-            const blob = await compressImage(f);
-            setPhoto(blob);
-            setPreview(URL.createObjectURL(blob));
-          } catch {
-            setError('Could not read that image.');
-          }
+          void acceptPhoto(f);
         }}
       />
       <span className="label">WHO CAN SEE IT</span>
