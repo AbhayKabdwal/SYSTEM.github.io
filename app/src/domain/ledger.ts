@@ -39,6 +39,8 @@ export const EXP = {
   dungeonBreakMult: 1.5,
   /** One-time bonus per streak milestone: this × the milestone's day count. */
   milestonePerDay: 5,
+  /** First quest ever cleared: enough to reach level 2 on day one. */
+  firstClear: 25,
 } as const;
 
 /**
@@ -296,6 +298,10 @@ export function computeLedger(logs: Logs, templates: Template[], player: Player 
       cleared++;
       weekActive = true;
       day.quest = questExp(log!, tier);
+      if (cleared === 1) {
+        day.bonus += EXP.firstClear;
+        events.push({ date: d, kind: 'milestone', text: 'First quest cleared', exp: EXP.firstClear });
+      }
       if (status === 'unverified') {
         day.quest = Math.round(day.quest * EXP.unverifiedShare);
         chain = 0;

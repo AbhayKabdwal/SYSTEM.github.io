@@ -73,6 +73,28 @@ describe('Effort Points (fair competition)', () => {
   });
 });
 
+describe('pacing', () => {
+  it('a first cleared quest reaches level 2 on day one', () => {
+    expect(at('x').level).toBe(2);
+    expect(at('u').level).toBe(1);
+  });
+
+  it('replays three years of history quickly', () => {
+    const logs = run('x'.repeat(1100), '2023-11-01');
+    const t = performance.now();
+    const l = L(logs, addDays('2023-11-01', 1099));
+    expect(performance.now() - t).toBeLessThan(1500);
+    expect(l.level).toBeGreaterThan(40);
+  });
+
+  it('Effort Points stay comparable across ranks over a week', () => {
+    const e = at('xxxxxxx').weekEp;
+    const hard: Quest = { ...QUEST, tier: 5, tasks: QUEST.tasks.map((t) => ({ ...t, target: t.target * 4 })) };
+    const s = L(run('xxxxxxx', MON, () => ({ dailyQuest: hard, questProgress: { pushups: 400, squats: 400 } })), addDays(MON, 6)).weekEp;
+    expect(Math.abs(e - s)).toBeLessThanOrEqual(7);
+  });
+});
+
 describe('items', () => {
   it('a 14-day streak earns a Streak Shield that absorbs the next miss', () => {
     const l = at('x'.repeat(14) + '-x');

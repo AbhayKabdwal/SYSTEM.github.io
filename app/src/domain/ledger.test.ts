@@ -125,7 +125,7 @@ describe('bonuses', () => {
   it('pays streak milestones once', () => {
     const l = at('xxx');
     expect(l.days[addDays(MON, 2)]!.bonus).toBe(EXP.milestonePerDay * 3);
-    expect(at('xxx-pxx').events.filter((e) => e.kind === 'milestone')).toHaveLength(1);
+    expect(at('xxx-pxx').events.filter((e) => e.kind === 'milestone' && e.text.includes('streak'))).toHaveLength(1);
   });
 
   it('pays a perfect week for 7 verified clears Monday to Sunday', () => {
