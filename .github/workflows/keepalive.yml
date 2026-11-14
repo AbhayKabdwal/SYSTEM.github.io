@@ -19,4 +19,5 @@ jobs:
           URL: ${{ vars.VITE_SUPABASE_URL }}
           KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
         # RLS hides everything from the anon key, so this returns [] but still hits the database.
-        run: curl -fsS "$URL/rest/v1/profiles?select=id&limit=1" -H "apikey: $KEY" -o /dev/null -w "HTTP %{http_code}\n"
+        run: |
+          curl -fsS "$URL/rest/v1/profiles?select=id&limit=1" -H "apikey: $KEY" -o /dev/null -w "HTTP %{http_code}\n"
