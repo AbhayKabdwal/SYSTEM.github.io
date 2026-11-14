@@ -354,11 +354,6 @@ export function computeLedger(logs: Logs, templates: Template[], player: Player 
         events.push({ date: d, kind: 'item', text: 'Found a Rest Elixir', exp: 0 });
       }
     }
-    const job = log?.side?.job;
-    if (job && level >= JOB_LEVEL && jobProgress < JOB_DAYS && questDone(job.quest, job.progress)) {
-      jobProgress++;
-      epSide += EP.side;
-    }
 
     if (streak > best) {
       for (const m of STREAK_MILESTONES) {
@@ -414,6 +409,12 @@ export function computeLedger(logs: Logs, templates: Template[], player: Player 
       events.push({ date: d, kind: 'trial', text: `Rank-up trial cleared: promoted to ${next.rank}-Rank`, exp: gain });
       extract(d, 'trial', next.rank);
       applyLevel();
+    }
+    // Also after the day's EXP: the Job Change quest counts on the day you reach level 40.
+    const job = log?.side?.job;
+    if (job && level >= JOB_LEVEL && jobProgress < JOB_DAYS && questDone(job.quest, job.progress)) {
+      jobProgress++;
+      epSide += EP.side;
     }
     day.total = exp - before;
 

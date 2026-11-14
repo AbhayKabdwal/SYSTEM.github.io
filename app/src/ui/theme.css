@@ -1733,8 +1733,9 @@ input[type='date']::-webkit-calendar-picker-indicator {
 .avatar-edit {
   position: absolute;
   left: 50%;
-  bottom: -2px;
+  top: -6px;
   transform: translateX(-50%);
+  white-space: nowrap;
   font-size: 9px;
   font-family: var(--hd);
   letter-spacing: 1px;
@@ -2002,4 +2003,18 @@ input[type='date']::-webkit-calendar-picker-indicator {
 
 .details[open] summary {
   margin-bottom: 6px;
+}
+
+.date-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.date-inp {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 15px;
 }

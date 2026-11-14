@@ -1,6 +1,6 @@
 # SYSTEM for Android
 
-The Android app is the same React app as the website, wrapped with [Capacitor](https://capacitorjs.com). GitHub Actions builds the APK, so you don't need Android Studio or the Android SDK on your computer.
+The Android app (Android 8 or newer) is the same React app as the website, wrapped with [Capacitor](https://capacitorjs.com). GitHub Actions builds the APK, so you don't need Android Studio or the Android SDK on your computer.
 
 On top of the website, the app adds:
 
@@ -8,6 +8,8 @@ On top of the website, the app adds:
 - **Native camera** for proof and progress photos.
 - **Android back button**: closes dialogs first, then goes back, then minimises the app.
 - **Haptics** on quest clears, level-ups and rank-ups.
+- **Home-screen widget**: long-press your home screen → Widgets → SYSTEM. Shows your streak, rank and today's quest progress; tap to open the app.
+- **Health Connect** (Android 9+; built in on Android 14): on the quest page, **Import from Health Connect** fills run, walk and ride tasks from workouts your watch or phone recorded. Read-only: the app never writes health data. Needs the Health Connect app on Android 13 and older.
 - **Sign-in links that open the app**: email confirmation and password reset come back into the app.
 
 Your data lives in the app's own storage. Logs, settings and photos sync with the website through your encrypted vault, the same as between two browsers.
@@ -77,7 +79,7 @@ The app has its own storage, separate from Chrome. Bring your data over either w
 
 ## Developing locally (optional)
 
-You only need this to build an APK on your own machine instead of in GitHub Actions: Node 20+, JDK 21 and the Android command-line tools ("Command line tools only" from developer.android.com/studio, no Android Studio needed).
+You only need this to build an APK on your own machine instead of in GitHub Actions: Node 20+, JDK 21 and the Android command-line tools (SDK platform 36) ("Command line tools only" from developer.android.com/studio, no Android Studio needed).
 
 ```bash
 cd app

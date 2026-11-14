@@ -194,7 +194,7 @@ export function QuestPage() {
       );
     else toast(gained > 0 ? `SAVED · +${gained} EXP` : gained < 0 ? `SAVED · ${gained} EXP` : 'LOG SAVED');
     const records = newRecords({ ...logs, [date]: log }, templates, date).filter((r) => !newRecords(logs, templates, date).some((x) => x.key === r.key && x.value >= r.value));
-    if (records.length) setTimeout(() => systemAlert(`NEW PERSONAL RECORD\n${records.map((r) => `${r.label.replace(' (one day)', '')}: ${r.detail ?? `${r.value} ${r.unit}`}`).join('\n')}`), 4800);
+    if (records.length) systemAlert(`NEW PERSONAL RECORD\n${records.map((r) => `${r.label.replace(' (one day)', '')}: ${r.detail ?? `${r.value} ${r.unit}`}`).join('\n')}`);
   }
 
   async function save() {
@@ -273,12 +273,15 @@ export function QuestPage() {
 
   return (
     <div className="page">
-      <Card>
-        <Sec>LOG DATE</Sec>
+      <div className="date-row">
+        <span className="label" style={{ margin: 0 }}>
+          {isToday ? 'LOGGING TODAY' : 'LOGGING A PAST DAY'}
+        </span>
         <input
           type="date"
-          className="inp"
-          aria-label="Log date"
+          className="inp date-inp"
+          aria-label={`Log date. You can log or edit the last ${EDIT_WINDOW_DAYS} days`}
+          title={`You can log or edit the last ${EDIT_WINDOW_DAYS} days. Older days are in Archives.`}
           value={date}
           min={minDate}
           max={today}
@@ -290,8 +293,7 @@ export function QuestPage() {
             setDate(v);
           }}
         />
-        <p className="hint">You can log or edit the last {EDIT_WINDOW_DAYS} days. Older days are in Archives.</p>
-      </Card>
+      </div>
 
       {status === 'rest' && saved?.rest && (
         <Card className="rest-card">
@@ -326,7 +328,7 @@ export function QuestPage() {
             onChange={(v) => edit((d) => ({ ...d, questProgress: { ...d.questProgress, [task.id]: v } }))}
           />
         ))}
-        {isNative && quest.tasks.some((t) => healthValueFor(t, { steps: 1, sessions: [] }) !== null || t.unit === 'km') && (
+        {isNative && quest.tasks.some((t) => healthValueFor(t, { steps: 0, sessions: [] }) !== null) && (
           <HealthImport
             date={date}
             tasks={quest.tasks}

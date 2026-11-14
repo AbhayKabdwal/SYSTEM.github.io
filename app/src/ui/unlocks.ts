@@ -43,7 +43,7 @@ export function useUnlockNotices(level: number, ready: boolean) {
         const l = lore[lore.length - 1]!;
         systemAlert(`SYSTEM ARCHIVE: ${l.title.toUpperCase()}\n${l.text}`);
       }
-    }, 900);
+    }, 600);
     return () => clearTimeout(t);
   }, [level, ready]);
 }

@@ -200,11 +200,15 @@ export function StatsCard({ ledger, body }: { ledger: Ledger; body: number }) {
   const alloc = player?.statAlloc ?? {};
   const free = ledger.statPoints.free;
   const spend = async (k: StatKey, d: number) => {
-    if (!player) return;
-    const cur = alloc[k] ?? 0;
-    if (d > 0 && free <= 0) return;
+    // Read the latest player, not this render's, so quick taps all count.
+    const p = useApp.getState().player;
+    if (!p) return;
+    const a = p.statAlloc ?? {};
+    const spent = Object.values(a).reduce((sum, n) => sum + (n ?? 0), 0);
+    const cur = a[k] ?? 0;
+    if (d > 0 && spent >= ledger.statPoints.total) return;
     if (d < 0 && cur <= 0) return;
-    await setPlayer({ ...player, statAlloc: { ...alloc, [k]: cur + d } });
+    await setPlayer({ ...p, statAlloc: { ...a, [k]: cur + d } });
   };
   return (
     <Collapsible

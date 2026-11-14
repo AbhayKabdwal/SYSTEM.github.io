@@ -33,27 +33,24 @@ create function public.roll_leagues() returns void
 language plpgsql security definer set search_path = '' as $$
 declare
   prev_week text := to_char(current_date - extract(isodow from current_date)::int + 1 - 7, 'YYYY-MM-DD');
-  l int;
-  n int;
-  k int;
 begin
   update public.profiles set league = greatest(league - 1, 0)
   where league > 0 and (stats is null or stats ->> 'week' < prev_week);
 
-  for l in 0..5 loop
-    select count(*) into n from public.profiles where league = l and stats ->> 'week' = prev_week;
-    continue when n < 5;
-    k := greatest(1, floor(n * 0.2));
-    with ranked as (
-      select id, row_number() over (order by coalesce((stats ->> 'weekEp')::int, 0) desc, id) as pos
-      from public.profiles where league = l and stats ->> 'week' = prev_week
-    )
-    update public.profiles p set league = case
-        when r.pos <= k and l < 5 then l + 1
-        when r.pos > n - k and l > 0 then l - 1
-        else l end
-    from ranked r where p.id = r.id;
-  end loop;
+  -- One statement over every league at once, so nobody moves twice in a run.
+  with ranked as (
+    select id, league,
+           row_number() over (partition by league order by coalesce((stats ->> 'weekEp')::int, 0) desc, id) as pos,
+           count(*) over (partition by league) as n
+    from public.profiles
+    where stats ->> 'week' = prev_week
+  )
+  update public.profiles p set league = case
+      when r.n >= 5 and r.pos <= greatest(1, floor(r.n * 0.2)) and r.league < 5 then r.league + 1
+      when r.n >= 5 and r.pos > r.n - greatest(1, floor(r.n * 0.2)) and r.league > 0 then r.league - 1
+      else r.league end
+  from ranked r
+  where p.id = r.id;
 end;
 $$;
 

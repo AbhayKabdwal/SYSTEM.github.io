@@ -1,7 +1,7 @@
 -- Row-level security checks. Run with: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(37);
+select plan(38);
 
 -- Three users via the sign-up trigger.
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -125,6 +125,12 @@ select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
 insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000c', '2026-11', 30);
 select is((select total::int from public.boss_status('2026-11')), 80, 'boss total adds every hunter');
 select is((select count(*)::int from public.boss_hits), 1, 'you only see your own boss hits');
+
+-- Weekly league roll (runs as the database owner via pg_cron): inactive hunters drop a league.
+reset role;
+update public.profiles set league = 2 where handle = 'alice';
+select public.roll_leagues();
+select is((select league::int from public.profiles where handle = 'alice'), 1, 'inactive hunters drop a league');
 
 -- Anonymous visitors see nothing.
 select set_config('role', 'anon', true);

@@ -15,7 +15,12 @@ A Solo Leveling–inspired training tracker: daily random-gate quests, penalty a
 - **Weekly instant dungeon:** an optional higher-volume boss run once a week.
 - **Status window:** STR, AGI, VIT, SEN, INT and FATIGUE, derived from what you actually train.
 - **Muscle map:** real anatomy art with a fatigue heat map. Load is counted in hard sets, estimated from your own recent bests (or an RPE you enter), and decays with each muscle's recovery half-life.
-- **Hunters network (optional):** photo feats in three visibility modes, follows, likes, a weekly EXP leaderboard (opt-in), block and report.
+- **Fair competition:** boards rank *Effort Points* (how much of your own quest you cleared, plus training against your own capacity, capped at 100 a day), so every rank competes evenly. Weekly leagues (Bronze → Monarch) promote the top 20% and relegate the bottom 20%.
+- **Guilds and duels:** invite-code guilds with a shared weekly quest, guild streak and board; 7-day 1v1 duels decided on Effort Points.
+- **Monthly boss:** every hunter's verified hard sets damage one shared boss.
+- **Progression:** stat points to spend (they tilt your quests), a level-40 Job Change into Fighter, Assassin or Mage, a Shadow Army extracted from perfect weeks, dungeons and trials, items (Streak Shield, Rest Elixir, EXP Scroll), dungeon breaks, personal records, a weekly report card you can share, a body photo timeline and a morning check-in that lightens the quest after bad sleep.
+- **Staged unlocks:** a new hunter sees only the quest, proof and streak. Features open with level and the System announces each one, along with lore entries.
+- **Hunters network (optional):** photo feats in three visibility modes, profile photos, follows, likes, block and report.
 - **Encrypted sync (optional):** logs are encrypted on the device (AES-256-GCM) with a key protected by your vault passphrase and a recovery code. The server stores only ciphertext.
 - **Your data:** JSON export/import (v1 backups included), automatic migration from the v1 app, erase-device and delete-account controls.
 

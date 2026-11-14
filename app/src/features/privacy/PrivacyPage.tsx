@@ -33,8 +33,10 @@ export function PrivacyPage() {
           served through short-lived links only to people allowed to see that feat. Deleting a feat deletes its photo.
         </p>
         <p className="prose">
-          <strong>Share stats</strong> (off by default) adds your level, rank, streak and this week's EXP to your profile and the leaderboard. You can
-          delete feats, block users (which hides you from each other and removes follows) and report abuse.
+          <strong>Share stats</strong> (off by default) adds your level, rank, streak, this week's EXP and Effort Points, and which of the last 14 days
+          you kept your streak, to your profile. Leagues, guild boards and guild streaks use these. Guild members see each other's profiles and the
+          guild roster; duels are visible only to the two hunters in them. Joining the monthly boss shares only your damage total, and only the overall
+          total is visible to others. You can delete feats, block users (which hides you from each other and removes follows) and report abuse.
         </p>
       </Card>
       <Card>
@@ -44,6 +46,10 @@ export function PrivacyPage() {
           vault, profile, feats, follows and likes from the server (Account).
         </p>
         <p className="prose">No analytics, ads or third-party trackers are included. Fonts are bundled with the app.</p>
+        <p className="prose">
+          Android: Health Connect access is read-only (steps, workouts, distance), used only to fill quest tasks on your phone, and never uploaded.
+          Notifications and the home-screen widget are generated on the device.
+        </p>
       </Card>
     </div>
   );

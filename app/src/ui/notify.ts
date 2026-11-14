@@ -17,15 +17,33 @@ export function toast(msg: string) {
   toastTimer = setTimeout(() => useNotify.setState({ toast: null }), 2800);
 }
 
-/** Full-screen "SYSTEM NOTIFICATION" for moments that matter. */
-export function systemAlert(msg: string) {
+const queue: string[] = [];
+
+function show(msg: string) {
   useNotify.setState({ sys: msg });
   hapticSuccess();
   clearTimeout(sysTimer);
-  sysTimer = setTimeout(() => useNotify.setState({ sys: null }), 4500);
+  sysTimer = setTimeout(dismissSystemAlert, 4500);
 }
 
-export const dismissSystemAlert = () => useNotify.setState({ sys: null });
+/**
+ * Full-screen "SYSTEM NOTIFICATION" for moments that matter. If one is already showing,
+ * the next waits its turn, so a level-up isn't hidden by the unlock it caused.
+ */
+export function systemAlert(msg: string) {
+  if (useNotify.getState().sys) {
+    if (!queue.includes(msg)) queue.push(msg);
+    return;
+  }
+  show(msg);
+}
+
+export function dismissSystemAlert() {
+  clearTimeout(sysTimer);
+  const next = queue.shift();
+  if (next) show(next);
+  else useNotify.setState({ sys: null });
+}
 
 /** Closes the system alert if one is showing. Returns false if none was. */
 export function dismissIfShowing(): boolean {
@@ -33,3 +51,5 @@ export function dismissIfShowing(): boolean {
   dismissSystemAlert();
   return true;
 }
+
+export const pendingAlerts = () => queue.length;

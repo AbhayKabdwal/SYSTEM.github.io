@@ -79,6 +79,7 @@ The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supa
 - `20261103000000_media_and_stats.sql`: the private `feat-media` storage bucket for Followers/Global photos (1 MB limit, JPEG/WebP only) and opt-in leaderboard stats.
 - `20261104000000_private_media.sql`: the owner-only `vault-media` bucket for encrypted backups of Private photos.
 - `20261114000000_avatars.sql`: profile photos (`profiles.avatar_path` and a public `avatars` bucket only the owner can write to).
+- `20261115000000_competition.sql`: guilds, duels, weekly leagues and the monthly boss. It also schedules the Monday league roll with `pg_cron`; if `db push` prints a notice that pg_cron is unavailable, enable it under **Database → Extensions** and push again.
 
 **"Connection timed out" on `db push`?** Your network blocks the database ports (5432/6543), which is common on campus and office networks. The direct database address is also IPv6-only. Switch to a phone hotspot and rerun. `config push` and the website use HTTPS, so they aren't affected.
 
@@ -92,7 +93,7 @@ The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supa
 npx supabase test db --remote
 ```
 
-All 27 checks should pass.
+All 38 checks should pass.
 
 ### 4. Configure auth
 
