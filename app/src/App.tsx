@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef, type ComponentType } from 'react';
 import { HashRouter, Link, NavLink, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useApp } from './state/store';
 import { useSession } from './state/session';
@@ -13,25 +13,32 @@ import { useUnlockNotices } from './ui/unlocks';
 import { myDuels, reportBossDamage, reportDuelScore } from './cloud/competition';
 import { duelPhase, duelScore } from './cloud/duelScore';
 import { bossJoined } from './features/status/sections';
-import { ReportPage } from './features/progress/ReportPage';
-import { RecordsPage } from './features/progress/RecordsPage';
-import { TimelinePage } from './features/progress/TimelinePage';
-import { GuildPage } from './features/social/Guilds';
 import { StatusPage } from './features/status/StatusPage';
 import { QuestPage } from './features/daily/QuestPage';
-import { BodyPage } from './features/body/BodyPage';
-import { HuntersPage } from './features/social/HuntersPage';
-import { ProfilePage } from './features/social/ProfilePage';
 import { MorePage } from './features/more/MorePage';
-import { PlanPage } from './features/plan/PlanPage';
-import { TrainingPage } from './features/training/TrainingPage';
-import { ArchiveDetail, ArchivesPage } from './features/archives/ArchivesPage';
-import { AccountPage } from './features/account/AccountPage';
-import { VaultPage } from './features/vault/VaultPage';
-import { PrivacyPage } from './features/privacy/PrivacyPage';
 import { SetupPage } from './features/onboarding/SetupPage';
-import { CalibratePage } from './features/onboarding/CalibratePage';
 import { useReminderScheduler } from './native/useReminders';
+
+/** Screens opened less often load on demand, so the app starts with just Status and Quest. */
+function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) {
+  return lazy(() => load().then((m) => ({ default: m[name] })));
+}
+
+const ReportPage = page(() => import('./features/progress/ReportPage'), 'ReportPage');
+const RecordsPage = page(() => import('./features/progress/RecordsPage'), 'RecordsPage');
+const TimelinePage = page(() => import('./features/progress/TimelinePage'), 'TimelinePage');
+const GuildPage = page(() => import('./features/social/Guilds'), 'GuildPage');
+const BodyPage = page(() => import('./features/body/BodyPage'), 'BodyPage');
+const HuntersPage = page(() => import('./features/social/HuntersPage'), 'HuntersPage');
+const ProfilePage = page(() => import('./features/social/ProfilePage'), 'ProfilePage');
+const PlanPage = page(() => import('./features/plan/PlanPage'), 'PlanPage');
+const TrainingPage = page(() => import('./features/training/TrainingPage'), 'TrainingPage');
+const AccountPage = page(() => import('./features/account/AccountPage'), 'AccountPage');
+const VaultPage = page(() => import('./features/vault/VaultPage'), 'VaultPage');
+const PrivacyPage = page(() => import('./features/privacy/PrivacyPage'), 'PrivacyPage');
+const CalibratePage = page(() => import('./features/onboarding/CalibratePage'), 'CalibratePage');
+const ArchivesPage = page(() => import('./features/archives/ArchivesPage'), 'ArchivesPage');
+const ArchiveDetail = page(() => import('./features/archives/ArchivesPage'), 'ArchiveDetail');
 
 const NAV: { to: string; icon: string; label: string; feature?: Feature }[] = [
   { to: '/', icon: '◈', label: 'STATUS' },
@@ -103,7 +110,9 @@ function DailyNotice({ ledger }: { ledger: Ledger }) {
           : `YOU FAILED YESTERDAY'S QUEST\nENTERING THE PENALTY ZONE`,
       );
     } else if (last) {
-      systemAlert(`[DAILY QUEST HAS ARRIVED]\n${y === 'verified' ? `Streak ${ledger.streak} · ×${ledger.nextMult.toFixed(2)} EXP today` : 'Clear it and attach proof to build your streak.'}`);
+      systemAlert(
+        `[DAILY QUEST HAS ARRIVED]\n${y === 'verified' ? `Streak ${ledger.streak} · ×${ledger.nextMult.toFixed(2)} EXP today` : 'Clear it and attach proof to build your streak.'}`,
+      );
     }
   }, [today]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
@@ -184,27 +193,35 @@ function Shell() {
       <Header ledger={ledger} />
       <main className="scroll-area">
         <ScrollToTop />
-        <Routes>
-          <Route path="/" element={<StatusPage />} />
-          <Route path="/quest" element={<QuestPage />} />
-          <Route path="/body" element={<BodyPage />} />
-          <Route path="/hunters" element={<HuntersPage />} />
-          <Route path="/u/:handle" element={<ProfilePage />} />
-          <Route path="/more" element={<MorePage />} />
-          <Route path="/plan" element={<PlanPage />} />
-          <Route path="/training" element={<TrainingPage />} />
-          <Route path="/archives" element={<ArchivesPage />} />
-          <Route path="/archives/:date" element={<ArchiveDetail />} />
-          <Route path="/account" element={<AccountPage />} />
-          <Route path="/vault" element={<VaultPage />} />
-          <Route path="/privacy" element={<PrivacyPage />} />
-          <Route path="/calibrate" element={<CalibratePage />} />
-          <Route path="/report" element={<ReportPage />} />
-          <Route path="/records" element={<RecordsPage />} />
-          <Route path="/timeline" element={<TimelinePage />} />
-          <Route path="/guild/:id" element={<GuildPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense
+          fallback={
+            <p className="hint" style={{ textAlign: 'center', marginTop: 24 }}>
+              Loading…
+            </p>
+          }
+        >
+          <Routes>
+            <Route path="/" element={<StatusPage />} />
+            <Route path="/quest" element={<QuestPage />} />
+            <Route path="/body" element={<BodyPage />} />
+            <Route path="/hunters" element={<HuntersPage />} />
+            <Route path="/u/:handle" element={<ProfilePage />} />
+            <Route path="/more" element={<MorePage />} />
+            <Route path="/plan" element={<PlanPage />} />
+            <Route path="/training" element={<TrainingPage />} />
+            <Route path="/archives" element={<ArchivesPage />} />
+            <Route path="/archives/:date" element={<ArchiveDetail />} />
+            <Route path="/account" element={<AccountPage />} />
+            <Route path="/vault" element={<VaultPage />} />
+            <Route path="/privacy" element={<PrivacyPage />} />
+            <Route path="/calibrate" element={<CalibratePage />} />
+            <Route path="/report" element={<ReportPage />} />
+            <Route path="/records" element={<RecordsPage />} />
+            <Route path="/timeline" element={<TimelinePage />} />
+            <Route path="/guild/:id" element={<GuildPage />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </main>
       <nav className="nav" aria-label="Main">
         {NAV.map((n) =>
@@ -249,7 +266,9 @@ function Onboarding() {
             BACK
           </Link>
         </header>
-        <main className="scroll-area">{pathname === '/account' ? <AccountPage /> : <PrivacyPage />}</main>
+        <main className="scroll-area">
+          <Suspense fallback={null}>{pathname === '/account' ? <AccountPage /> : <PrivacyPage />}</Suspense>
+        </main>
       </div>
     );
   }
