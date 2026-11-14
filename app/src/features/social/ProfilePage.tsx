@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { RANK_GATES } from '../../domain';
-import { block, follow, followCounts, followingIds, profileByHandle, unfollow, type Profile } from '../../cloud/social';
+import { avatarUrl, block, follow, followCounts, followingIds, profileByHandle, unfollow, type Profile } from '../../cloud/social';
+import { Avatar } from '../../ui/Avatar';
+import { challenge, leagueOf } from '../../cloud/competition';
 import { useSession } from '../../state/session';
 import { Card, ErrorText, Sec } from '../../ui/components';
 import { toast } from '../../ui/notify';
@@ -77,9 +79,14 @@ export function ProfilePage() {
   return (
     <div className="page">
       <Card>
-        <div className="rank-name">{profile.display_name}</div>
-        <div className="muted" style={{ marginTop: 2 }}>
-          @{profile.handle}
+        <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
+          <Avatar url={avatarUrl(profile.avatar_path)} name={profile.display_name} size={64} />
+          <div>
+            <div className="rank-name">{profile.display_name}</div>
+            <div className="muted" style={{ marginTop: 2 }}>
+              @{profile.handle}
+            </div>
+          </div>
         </div>
         {profile.bio && (
           <p className="prose" style={{ marginTop: 10 }}>
@@ -88,12 +95,15 @@ export function ProfilePage() {
         )}
         {profile.stats && (
           <div className="profile-stats">
+            <span className="league-badge" style={{ color: leagueOf(profile.league).color }}>
+              {leagueOf(profile.league).name.toUpperCase()}
+            </span>
             <span className="rank-badge-sm" style={{ color: RANK_GATES.find((g) => g.rank === profile.stats!.rank)?.color }}>
               {profile.stats.rank}
             </span>
             <span>LVL {profile.stats.level}</span>
             <span>🔥 {profile.stats.streak}</span>
-            <span>+{profile.stats.weekExp.toLocaleString()} EXP this week</span>
+            <span>{(profile.stats.weekEp ?? 0).toLocaleString()} EP this week</span>
           </div>
         )}
         <div className="stat-grid" style={{ gridTemplateColumns: '1fr 1fr', marginTop: 12 }}>
@@ -112,9 +122,25 @@ export function ProfilePage() {
           </Link>
         ) : (
           <>
-            <button className={`btn ${isFollowing ? '' : 'btn-grn'}`} onClick={toggleFollow}>
-              {isFollowing ? 'UNFOLLOW' : 'FOLLOW'}
-            </button>
+            <div className="btn-row">
+              <button className={`btn ${isFollowing ? '' : 'btn-grn'}`} onClick={toggleFollow}>
+                {isFollowing ? 'UNFOLLOW' : 'FOLLOW'}
+              </button>
+              <button
+                className="btn btn-gold"
+                onClick={async () => {
+                  if (!confirm(`Challenge @${profile.handle} to a 7-day duel? Most Effort Points wins.`)) return;
+                  try {
+                    await challenge(me, profile.id);
+                    toast('CHALLENGE SENT');
+                  } catch (e) {
+                    toast((e as Error).message);
+                  }
+                }}
+              >
+                ⚔ CHALLENGE
+              </button>
+            </div>
             <div className="btn-row" style={{ marginTop: 8 }}>
               <ReportButton me={me} target={{ userId: profile.id }} onDone={() => undefined} />
               <button

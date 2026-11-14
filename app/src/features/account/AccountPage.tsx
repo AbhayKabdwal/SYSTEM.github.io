@@ -1,7 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { cloudEnabled } from '../../cloud/client';
 import { deleteAccount, handleAvailable, HANDLE_RE, passwordProblem, sendPasswordReset, signIn, signOut, signUp, updatePassword } from '../../cloud/auth';
-import { blockedProfiles, unblock, updateProfile, type Profile } from '../../cloud/social';
+import { avatarUrl, blockedProfiles, setAvatar, unblock, updateProfile, type Profile } from '../../cloud/social';
+import { createRepo } from '../../data/repo';
+import { choosePhoto } from '../../native/photo';
+import { Avatar } from '../../ui/Avatar';
+import { squareImage } from '../../ui/image';
 import { useSession } from '../../state/session';
 import { useApp } from '../../state/store';
 import { Card, Dialog, ErrorText, Field, Sec, Seg } from '../../ui/components';
@@ -35,7 +39,8 @@ function friendly(err: unknown): string {
   if (/email not confirmed/i.test(msg)) return 'Confirm your email first: check your inbox for the link.';
   if (/already registered/i.test(msg)) return 'An account with this email already exists. Sign in instead.';
   if (/rate limit/i.test(msg)) return 'Too many attempts. Wait a minute and try again.';
-  if (/failed to fetch|network/i.test(msg)) return 'Network error. Check your connection.';
+  if (/failed to fetch|network|load failed/i.test(msg))
+    return "Can't reach the server. Check your internet connection and try again in a minute.";
   return msg;
 }
 
@@ -494,8 +499,72 @@ function ProfileEditor() {
         </button>
         <ErrorText error={error} />
       </form>
+      <ProfilePhoto />
       <ShareStatsToggle />
     </Card>
+  );
+}
+
+const photoRepo = createRepo();
+const AVATAR_EDGE = 256;
+
+/** Profile photo other hunters see. Separate from the private one on your Status window. */
+function ProfilePhoto() {
+  const { profile, user, refreshProfile } = useSession();
+  const player = useApp((s) => s.player);
+  const input = useRef<HTMLInputElement>(null);
+  const { busy, error, run } = useAction();
+  if (!profile || !user) return null;
+
+  const upload = (blob: Blob | null) =>
+    run(async () => {
+      await setAvatar(user.id, blob && (await squareImage(blob, AVATAR_EDGE)), profile.avatar_path);
+      await refreshProfile();
+      toast(blob ? 'PROFILE PHOTO UPDATED' : 'PROFILE PHOTO REMOVED');
+    })();
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <span className="label">PROFILE PHOTO</span>
+      <div className="row" style={{ justifyContent: 'flex-start', gap: 12 }}>
+        <Avatar url={avatarUrl(profile.avatar_path)} name={profile.display_name} size={56} />
+        <div className="stack" style={{ flex: 1 }}>
+          {player?.avatarId && (
+            <button
+              className="btn btn-sm"
+              disabled={busy}
+              onClick={async () => {
+                const row = await photoRepo.getPhoto(player.avatarId!);
+                if (row) void upload(row.blob);
+              }}
+            >
+              USE MY STATUS PHOTO
+            </button>
+          )}
+          <button className="btn btn-sm" disabled={busy} onClick={() => void choosePhoto(input.current, (f) => f && void upload(f))}>
+            CHOOSE PHOTO
+          </button>
+          {profile.avatar_path && (
+            <button className="link-btn" disabled={busy} onClick={() => void upload(null)}>
+              remove
+            </button>
+          )}
+        </div>
+      </div>
+      <p className="hint">Visible to signed-in hunters, like your display name. Cropped square and stripped of location data.</p>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (f) void upload(f);
+        }}
+      />
+      <ErrorText error={error} />
+    </div>
   );
 }
 

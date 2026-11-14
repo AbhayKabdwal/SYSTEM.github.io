@@ -6,8 +6,16 @@ export interface PublicStats {
   rank: string;
   streak: number;
   weekExp: number;
+  /** Effort Points this week: the fair, rank-independent score boards use. */
+  weekEp?: number;
   /** Monday of the week `weekExp` is for. */
   week: string;
+  /** The date `recentEp` ends on. */
+  day?: string;
+  /** Effort Points for the 14 days ending on `day`, oldest first. */
+  recentEp?: number[];
+  /** "1" where that day kept the streak alive (cleared with proof, rest, or shield). */
+  kept?: string;
 }
 
 export interface Profile {
@@ -17,6 +25,9 @@ export interface Profile {
   bio: string;
   created_at: string;
   stats: PublicStats | null;
+  avatar_path: string | null;
+  /** 0 Bronze … 5 Monarch. Moves weekly on the server. */
+  league: number;
 }
 
 /** Server-side visibility. "Private" photos never get this far. */
@@ -33,13 +44,14 @@ export interface Feat {
   image_path: string | null;
   /** Short-lived signed URL for the photo, if any. */
   imageUrl: string | null;
-  author: Pick<Profile, 'id' | 'handle' | 'display_name'>;
+  author: Pick<Profile, 'id' | 'handle' | 'display_name' | 'avatar_path'>;
   likeCount: number;
   likedByMe: boolean;
 }
 
 const PAGE = 20;
-const PROFILE_COLS = 'id, handle, display_name, bio, created_at, stats';
+const PROFILE_COLS = 'id, handle, display_name, bio, created_at, stats, avatar_path, league';
+const AVATARS = 'avatars';
 const BUCKET = 'feat-media';
 const SIGNED_URL_SECONDS = 60 * 60;
 
@@ -158,24 +170,48 @@ export async function deleteFeat(id: string, imagePath?: string | null) {
   if (imagePath) await sb.storage.from(BUCKET).remove([imagePath]);
 }
 
+/** Public CDN URL for a profile photo. */
+export function avatarUrl(path: string | null | undefined): string | null {
+  if (!path) return null;
+  return requireClient().storage.from(AVATARS).getPublicUrl(path).data.publicUrl;
+}
+
+/** Uploads a new profile photo (or with null, removes it) and deletes the old file. */
+export async function setAvatar(me: string, image: Blob | null, oldPath: string | null) {
+  const sb = requireClient();
+  let path: string | null = null;
+  if (image) {
+    path = `${me}/${crypto.randomUUID()}.jpg`;
+    const { error } = await sb.storage.from(AVATARS).upload(path, image, { contentType: 'image/jpeg', upsert: false });
+    if (error) throw error;
+  }
+  const { error } = await sb.from('profiles').update({ avatar_path: path }).eq('id', me);
+  if (error) {
+    if (path) await sb.storage.from(AVATARS).remove([path]);
+    throw error;
+  }
+  if (oldPath) await sb.storage.from(AVATARS).remove([oldPath]);
+}
+
 /** Publishes (or with null, withdraws) leaderboard stats on your profile. */
 export async function publishStats(me: string, stats: PublicStats | null) {
   const { error } = await requireClient().from('profiles').update({ stats }).eq('id', me);
   if (error) throw error;
 }
 
-export type BoardScope = { kind: 'following'; ids: string[] } | { kind: 'global' };
+export type BoardScope = { kind: 'following'; ids: string[] } | { kind: 'global' } | { kind: 'league'; league: number } | { kind: 'ids'; ids: string[] };
 
-/** Weekly EXP leaderboard among hunters who share stats. */
+/** Weekly Effort Points leaderboard among hunters who share stats. */
 export async function leaderboard(scope: BoardScope, week: string): Promise<Profile[]> {
   let q = requireClient()
     .from('profiles')
     .select(PROFILE_COLS)
     .not('stats', 'is', null)
     .eq('stats->>week', week)
-    .order('stats->weekExp', { ascending: false })
+    .order('stats->weekEp', { ascending: false, nullsFirst: false })
     .limit(50);
-  if (scope.kind === 'following') q = q.in('id', scope.ids);
+  if (scope.kind === 'following' || scope.kind === 'ids') q = q.in('id', scope.ids);
+  if (scope.kind === 'league') q = q.eq('league', scope.league);
   const { data, error } = await q;
   if (error) throw error;
   return (data ?? []) as Profile[];
@@ -188,7 +224,7 @@ export async function feed(me: string, scope: FeedScope, before?: string): Promi
   const sb = requireClient();
   let q = sb
     .from('feats')
-    .select('id, user_id, kind, title, body, visibility, created_at, image_path, author:profiles!feats_user_id_fkey(id, handle, display_name), likes(count)')
+    .select('id, user_id, kind, title, body, visibility, created_at, image_path, author:profiles!feats_user_id_fkey(id, handle, display_name, avatar_path), likes(count)')
     .order('created_at', { ascending: false })
     .limit(PAGE);
   if (before) q = q.lt('created_at', before);
@@ -235,3 +271,4 @@ export async function unlike(me: string, featId: string) {
 }
 
 export const FEED_PAGE = PAGE;
+export { PROFILE_COLS };

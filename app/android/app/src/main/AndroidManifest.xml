@@ -22,6 +22,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Android 13 and older show Health Connect's privacy rationale from here. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
+            </intent-filter>
+
             <!-- Sign-up confirmation and password-reset emails return here: io.github.abhaykabdwal.system://auth -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
@@ -31,6 +36,30 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Android 14+: Health Connect links here to explain why the app reads health data. -->
+        <activity-alias
+            android:name="ViewPermissionUsageActivity"
+            android:exported="true"
+            android:permission="android.permission.START_VIEW_PERMISSION_USAGE"
+            android:targetActivity=".MainActivity">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW_PERMISSION_USAGE" />
+                <category android:name="android.intent.category.HEALTH_PERMISSIONS" />
+            </intent-filter>
+        </activity-alias>
+
+        <!-- Home-screen widget: streak and today's quest. -->
+        <receiver
+            android:name=".SystemWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/system_widget_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -50,6 +79,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Reminders on time even in battery saver; without it Android may deliver them a little late. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Health Connect, read-only: steps, workouts and distance to auto-fill cardio tasks. -->
+    <uses-permission android:name="android.permission.health.READ_STEPS" />
+    <uses-permission android:name="android.permission.health.READ_EXERCISE" />
+    <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <!-- Choosing an existing photo on Android 12 and older (13+ uses the system photo picker). -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+    <queries>
+        <package android:name="com.google.android.apps.healthdata" />
+    </queries>
 </manifest>

@@ -9,6 +9,7 @@ describe('media sync', () => {
       b: { proof: { photoId: 'p3', at: '2026-11-02T10:00:00Z', visibility: 'private' } },
     });
     expect([...ids].sort()).toEqual(['p1', 'p2', 'p3']);
+    expect(referencedPhotos({}, ['avatar', undefined]).has('avatar')).toBe(true);
   });
 
   it('uploads local-only, downloads remote-only, deletes only old unreferenced files', () => {

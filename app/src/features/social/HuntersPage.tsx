@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
+import { LeagueBoard } from './LeagueBoard';
+import { GuildsPanel } from './Guilds';
+import { DuelsPanel } from './Duels';
 import { cloudEnabled } from '../../cloud/client';
 import {
   block,
@@ -7,18 +10,18 @@ import {
   feed,
   FEED_PAGE,
   followingIds,
-  leaderboard,
   like,
   postFeat,
   report,
   searchProfiles,
   unlike,
   type Feat,
-  type BoardScope,
   type FeedScope,
   type Profile,
+  avatarUrl,
 } from '../../cloud/social';
-import { achievements, RANK_GATES, weekOf, type Achievement, type Visibility } from '../../domain';
+import { Avatar } from '../../ui/Avatar';
+import { achievements, RANK_GATES, type Achievement, type Visibility } from '../../domain';
 import { createRepo, uid } from '../../data/repo';
 import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
@@ -28,7 +31,7 @@ import { choosePhoto } from '../../native/photo';
 import { timeAgo, useLedger, usePhotoUrl, useToday } from '../../ui/hooks';
 import { toast } from '../../ui/notify';
 
-type Tab = 'following' | 'explore' | 'ranks';
+type Tab = 'feed' | 'league' | 'guilds' | 'duels';
 
 const repo = createRepo();
 const JOURNAL_KEY = 'journal';
@@ -55,7 +58,9 @@ function useJournal() {
 
 export function HuntersPage() {
   const user = useSession((s) => s.user);
-  const [tab, setTab] = useState<Tab>('following');
+  const navTab = (useLocation().state as { tab?: Tab } | null)?.tab;
+  const [tab, setTab] = useState<Tab>(navTab ?? 'feed');
+  const [feedScope, setFeedScope] = useState<'following' | 'explore'>('following');
   const [composing, setComposing] = useState(false);
   const [showJournal, setShowJournal] = useState(false);
   const [reload, setReload] = useState(0);
@@ -91,16 +96,33 @@ export function HuntersPage() {
         <>
           <Search />
           <Seg
-            label="Feed"
+            label="Hunters"
             value={tab}
             onChange={setTab}
             options={[
-              { value: 'following', label: 'FOLLOWING' },
-              { value: 'explore', label: 'GLOBAL' },
-              { value: 'ranks', label: 'RANKS' },
+              { value: 'feed', label: 'FEED' },
+              { value: 'league', label: 'LEAGUE' },
+              { value: 'guilds', label: 'GUILDS' },
+              { value: 'duels', label: 'DUELS' },
             ]}
           />
-          {tab === 'ranks' ? <Leaderboard /> : <FeedList key={`${tab}-${reload}`} scopeKind={tab} />}
+          {tab === 'feed' && (
+            <>
+              <Seg
+                label="Feed scope"
+                value={feedScope}
+                onChange={setFeedScope}
+                options={[
+                  { value: 'following', label: 'FOLLOWING' },
+                  { value: 'explore', label: 'GLOBAL' },
+                ]}
+              />
+              <FeedList key={`${feedScope}-${reload}`} scopeKind={feedScope} />
+            </>
+          )}
+          {tab === 'league' && <LeagueBoard />}
+          {tab === 'guilds' && <GuildsPanel />}
+          {tab === 'duels' && <DuelsPanel />}
         </>
       )}
       {composing && (
@@ -156,75 +178,6 @@ function Journal({ entries, onChange }: { entries: JournalEntry[]; onChange: (e:
 function LocalPhoto({ id }: { id: string | null }) {
   const url = usePhotoUrl(id);
   return url ? <img className="feat-img" src={url} alt="" /> : null;
-}
-
-function Leaderboard() {
-  const me = useSession((s) => s.user!.id);
-  const share = useApp((s) => s.player?.shareStats);
-  const today = useToday();
-  const week = weekOf(today)[0]!;
-  const [scope, setScope] = useState<'following' | 'global'>('following');
-  const [rows, setRows] = useState<Profile[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setRows(null);
-    (async () => {
-      const s: BoardScope = scope === 'global' ? { kind: 'global' } : { kind: 'following', ids: [me, ...(await followingIds(me))] };
-      return leaderboard(s, week);
-    })()
-      .then((r) => !cancelled && setRows(r))
-      .catch((e: Error) => !cancelled && setError(e.message));
-    return () => {
-      cancelled = true;
-    };
-  }, [scope, me, week]);
-
-  return (
-    <Card>
-      <Sec>WEEKLY EXP LEADERBOARD</Sec>
-      <Seg
-        label="Leaderboard scope"
-        value={scope}
-        onChange={setScope}
-        options={[
-          { value: 'following', label: 'YOU + FOLLOWING' },
-          { value: 'global', label: 'GLOBAL' },
-        ]}
-      />
-      {!share && (
-        <p className="hint">
-          You're not on the board. Turn on <Link to="/account">Share stats</Link> to appear.
-        </p>
-      )}
-      {rows === null && !error && <p className="hint">Loading…</p>}
-      {rows?.length === 0 && <p className="prose muted">No one has posted stats this week yet.</p>}
-      {rows?.map((p, i) => {
-        const gate = RANK_GATES.find((g) => g.rank === p.stats?.rank);
-        return (
-          <Link key={p.id} to={`/u/${p.handle}`} className={`board-row${p.id === me ? ' me' : ''}`}>
-            <span className="board-pos">{i + 1}</span>
-            <span className="rank-badge-sm" style={{ color: gate?.color }}>
-              {p.stats?.rank}
-            </span>
-            <span style={{ flex: 1, minWidth: 0 }}>
-              <span className="list-title">{p.display_name}</span>
-              <span className="list-sub">
-                {' '}
-                LVL {p.stats?.level} · 🔥{p.stats?.streak}
-              </span>
-            </span>
-            <span className="board-exp">{p.stats?.weekExp.toLocaleString()}</span>
-          </Link>
-        );
-      })}
-      <ErrorText error={error} />
-      <p className="hint" style={{ marginTop: 8 }}>
-        Stats are reported by each hunter's app.
-      </p>
-    </Card>
-  );
 }
 
 export function FeedList({ scopeKind, userId }: { scopeKind: 'following' | 'explore' | 'user'; userId?: string }) {
@@ -305,7 +258,10 @@ function FeatCard({ feat, me, onChange }: { feat: Feat; me: string; onChange: (p
     <article className="feat">
       <div className="feat-head">
         <Link className="feat-author" to={`/u/${feat.author.handle}`}>
-          {feat.author.display_name} <span className="muted">@{feat.author.handle}</span>
+          <Avatar url={avatarUrl(feat.author.avatar_path)} name={feat.author.display_name} size={32} />
+          <span>
+            {feat.author.display_name} <span className="muted">@{feat.author.handle}</span>
+          </span>
         </Link>
         <span className="feat-time">{timeAgo(feat.created_at)}</span>
       </div>
@@ -564,6 +520,7 @@ function Search() {
       </Field>
       {results.map((p) => (
         <Link key={p.id} to={`/u/${p.handle}`} className="list-item">
+          <Avatar url={avatarUrl(p.avatar_path)} name={p.display_name} size={36} />
           <div style={{ flex: 1 }}>
             <div className="list-title">{p.display_name}</div>
             <div className="list-sub">@{p.handle}</div>

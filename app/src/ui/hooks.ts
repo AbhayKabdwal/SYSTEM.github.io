@@ -35,6 +35,8 @@ export function useQuestFor(date: string, ledger: Ledger): Quest {
   const logs = useApp((s) => s.logs);
   const questPool = useApp((s) => s.questPool);
   const prefs = useApp((s) => s.player?.prefs);
+  const statAlloc = useApp((s) => s.player?.statAlloc);
+  const jobClass = useApp((s) => s.player?.jobClass);
   const today = useToday();
   const saved = logs[date]?.dailyQuest;
   return useMemo(
@@ -48,8 +50,9 @@ export function useQuestFor(date: string, ledger: Ledger): Quest {
         prefs,
         tier: ledger.tier as Tier,
         progress: ledger.rankProgress,
+        tilt: { statAlloc, jobClass },
       }),
-    [saved, date, today, ledger.penaltyToday, ledger.tier, ledger.rankProgress, questPool, logs, prefs],
+    [saved, date, today, ledger.penaltyToday, ledger.tier, ledger.rankProgress, questPool, logs, prefs, statAlloc, jobClass],
   );
 }
 

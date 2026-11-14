@@ -14,6 +14,10 @@ import {
   treeForExercise,
   treeUnit,
   trialQuest,
+  jobQuest,
+  JOB_DAYS,
+  JOB_LEVEL,
+  newRecords,
   weekOf,
   type DailyLog,
   type Exercise,
@@ -32,6 +36,8 @@ import { createRepo } from '../../data/repo';
 import { Card, Sec, Seg } from '../../ui/components';
 import { compressImage } from '../../ui/image';
 import { choosePhoto } from '../../native/photo';
+import { isNative } from '../../native/platform';
+import { connectHealth, healthStatus, healthValueFor, readHealthDay } from '../../native/health';
 import { systemAlert, toast } from '../../ui/notify';
 import { useLedger, usePhotoUrl, useQuestFor, useToday } from '../../ui/hooks';
 
@@ -115,10 +121,12 @@ export function QuestPage() {
     if (savedSide.trial) out.trial = savedSide.trial.quest;
     else if (isToday && prefs && ledger.trialReady) out.trial = trialQuest((ledger.tier + 1) as Tier, prefs);
     if (savedSide.dungeon) out.dungeon = savedSide.dungeon.quest;
-    else if (isToday && prefs && !ledger.dungeonWeeks.has(weekOf(today)[0]!))
-      out.dungeon = dungeonQuest(weekOf(today)[0]!, { tier: ledger.tier as Tier, progress: ledger.rankProgress, prefs });
+    else if (isToday && prefs && ledger.level >= 4 && !ledger.dungeonWeeks.has(weekOf(today)[0]!))
+      out.dungeon = dungeonQuest(weekOf(today)[0]!, { tier: ledger.tier as Tier, progress: ledger.rankProgress, prefs, tilt: { statAlloc: player?.statAlloc, jobClass: player?.jobClass } }, ledger.dungeonBreak);
+    if (savedSide.job) out.job = savedSide.job.quest;
+    else if (isToday && prefs && ledger.level >= JOB_LEVEL && !player?.jobClass && ledger.jobProgress < JOB_DAYS) out.job = jobQuest(ledger.tier as Tier, prefs);
     return out;
-  }, [saved, isToday, prefs, ledger.trialReady, ledger.tier, ledger.dungeonWeeks, ledger.rankProgress, today]);
+  }, [saved, isToday, prefs, ledger.trialReady, ledger.tier, ledger.dungeonWeeks, ledger.rankProgress, ledger.level, ledger.dungeonBreak, ledger.jobProgress, player?.statAlloc, player?.jobClass, today]);
   const [openSide, setOpenSide] = useState<SideQuestKind | null>(navState?.focus ?? null);
   const sideRefs = useRef<Partial<Record<SideQuestKind, HTMLDivElement | null>>>({});
   useEffect(() => {
@@ -175,11 +183,18 @@ export function QuestPage() {
     if (after.tier > before.tier) systemAlert(`RANK UP\nYOU ARE NOW ${after.rank}-RANK\nQuests move to harder variations.`);
     else if (after.level > before.level) systemAlert(`LEVEL UP\nLVL ${after.level} — ${after.title.title.toUpperCase()}`);
     else if (after.days[date]?.restored && !before.days[date]?.restored) systemAlert(`PENALTY ZONE SURVIVED\n${after.streak}-day streak restored`);
+    else if (after.shadows.length > before.shadows.length) {
+      const sh = after.shadows[after.shadows.length - 1]!;
+      systemAlert(`ARISE.\nSHADOW EXTRACTED: ${sh.name.toUpperCase()}\n+${gained} EXP`);
+    } else if (after.jobProgress > before.jobProgress)
+      systemAlert(after.jobReady ? 'JOB CHANGE QUEST COMPLETE\nChoose your class on the Status page.' : `JOB CHANGE QUEST ${after.jobProgress}/${JOB_DAYS}\nReturn tomorrow.`);
     else if (!wasDone && isComplete(log))
       systemAlert(
         `${log.penaltyAttempt ? 'PENALTY QUEST CLEARED' : 'QUEST COMPLETED'}\n+${gained} EXP${after.days[date]?.status === 'unverified' && isToday ? '\nAttach proof for full EXP and to grow your streak.' : ''}`,
       );
     else toast(gained > 0 ? `SAVED · +${gained} EXP` : gained < 0 ? `SAVED · ${gained} EXP` : 'LOG SAVED');
+    const records = newRecords({ ...logs, [date]: log }, templates, date).filter((r) => !newRecords(logs, templates, date).some((x) => x.key === r.key && x.value >= r.value));
+    if (records.length) setTimeout(() => systemAlert(`NEW PERSONAL RECORD\n${records.map((r) => `${r.label.replace(' (one day)', '')}: ${r.detail ?? `${r.value} ${r.unit}`}`).join('\n')}`), 4800);
   }
 
   async function save() {
@@ -290,6 +305,14 @@ export function QuestPage() {
         </Card>
       )}
 
+      {isToday && !saved?.rest && !penalty && prefs && <CheckinCard locked={!!saved?.dailyQuest} />}
+
+      {saved?.items?.scroll && (
+        <p className="hint" style={{ color: 'var(--gold)', textAlign: 'center' }}>
+          📜 EXP Scroll active: double EXP today.
+        </p>
+      )}
+
       <Card className={penalty ? 'penalty-card' : ''}>
         <Sec>{penalty ? 'MANDATORY CLEAR' : 'DAILY QUEST'}</Sec>
         <div className="label" style={{ color: penalty ? 'var(--red)' : 'var(--bright)' }}>
@@ -303,6 +326,14 @@ export function QuestPage() {
             onChange={(v) => edit((d) => ({ ...d, questProgress: { ...d.questProgress, [task.id]: v } }))}
           />
         ))}
+        {isNative && quest.tasks.some((t) => healthValueFor(t, { steps: 1, sessions: [] }) !== null || t.unit === 'km') && (
+          <HealthImport
+            date={date}
+            tasks={quest.tasks}
+            onImport={(vals) => edit((d) => ({ ...d, questProgress: { ...d.questProgress, ...vals } }))}
+            current={draft.questProgress}
+          />
+        )}
       </Card>
 
       {isToday && !!player?.rulesSince && !penalty && !saved?.rest && !isComplete(saved) && restAvailable(ledger, today) && (
@@ -341,9 +372,9 @@ export function QuestPage() {
         const open = openSide === kind || !!saved?.side?.[kind];
         return (
           <div key={kind} ref={(el) => (sideRefs.current[kind] = el)}>
-            <Card className={kind === 'trial' ? 'trial-card' : 'dungeon-card'}>
-              <Sec>{kind === 'trial' ? 'RANK-UP TRIAL' : 'WEEKLY INSTANT DUNGEON'}</Sec>
-              <div className="label" style={{ color: kind === 'trial' ? 'var(--gold)' : 'var(--purple)' }}>
+            <Card className={kind === 'dungeon' ? 'dungeon-card' : 'trial-card'}>
+              <Sec>{kind === 'trial' ? 'RANK-UP TRIAL' : kind === 'job' ? `JOB CHANGE · DAY ${Math.min(ledger.jobProgress + 1, JOB_DAYS)} OF ${JOB_DAYS}` : q.name.startsWith('DUNGEON BREAK') ? '⚠ DUNGEON BREAK' : 'WEEKLY INSTANT DUNGEON'}</Sec>
+              <div className="label" style={{ color: kind === 'dungeon' ? 'var(--purple)' : 'var(--gold)' }}>
                 {q.name}
                 {done ? ' · CLEARED' : ''}
               </div>
@@ -352,10 +383,12 @@ export function QuestPage() {
                   <p className="prose">
                     {kind === 'trial'
                       ? `Prove you belong at ${nextGate?.rank}-Rank: next-rank variations at 1.3× volume. Clear it to be promoted (+${EXP.trialBase + EXP.trialPerTier * (ledger.tier + 1)} EXP).`
-                      : `Optional boss run. Clear all five for +${EXP.dungeonBase + EXP.dungeonPerTier * ledger.tier} EXP. Once per week.`}
+                      : kind === 'job'
+                        ? `Clear this on ${JOB_DAYS} separate days to choose your class.`
+                        : `Optional boss run. Clear all five for +${Math.round((EXP.dungeonBase + EXP.dungeonPerTier * ledger.tier) * (ledger.dungeonBreak ? EXP.dungeonBreakMult : 1))} EXP and a shadow. Once per week.`}
                   </p>
                   <button className="btn btn-gold" style={{ marginTop: 10 }} onClick={() => setOpenSide(kind)}>
-                    {kind === 'trial' ? 'ENTER THE TRIAL' : 'ENTER DUNGEON'}
+                    {kind === 'trial' ? 'ENTER THE TRIAL' : kind === 'job' ? 'BEGIN' : 'ENTER DUNGEON'}
                   </button>
                 </>
               ) : (
@@ -684,3 +717,95 @@ function ProofCard(props: {
 }
 
 const ProofImage = ({ url }: { url: string | null }) => (url ? <img className="proof-img" src={url} alt="Workout proof" /> : <div className="proof-img placeholder">📷</div>);
+
+/** Morning check-in: before today's quest is set, poor sleep or soreness lightens it. */
+function CheckinCard({ locked }: { locked: boolean }) {
+  const { logs, saveLog } = useApp();
+  const today = useToday();
+  const log = logs[today];
+  const c = log?.checkin;
+  const [sleep, setSleep] = useState(String(c?.sleep ?? ''));
+  const [sore, setSore] = useState(c?.soreness ?? 2);
+  if (c && locked) {
+    return (
+      <p className="hint" style={{ textAlign: 'center' }}>
+        Check-in: {c.sleep} h sleep · soreness {c.soreness}/5
+      </p>
+    );
+  }
+  return (
+    <Card>
+      <Sec>MORNING CHECK-IN</Sec>
+      {locked ? (
+        <p className="hint">Today's quest is already set. Check in before you start tomorrow and the System adjusts it.</p>
+      ) : (
+        <p className="hint">Slept badly or very sore? The System lightens today's quest instead of punishing you.</p>
+      )}
+      <div className="rec-grid">
+        <label className="label">
+          HOURS SLEPT
+          <input className="inp" type="number" inputMode="decimal" min={0} max={16} step={0.5} value={sleep} onChange={(e) => setSleep(e.target.value)} />
+        </label>
+        <label className="label">
+          SORENESS {sore}/5
+          <input type="range" min={1} max={5} value={sore} onChange={(e) => setSore(Number(e.target.value))} style={{ width: '100%' }} />
+        </label>
+      </div>
+      <button
+        className="btn btn-sm"
+        style={{ marginTop: 8 }}
+        disabled={!sleep}
+        onClick={async () => {
+          await saveLog(today, { ...(log ?? {}), checkin: { sleep: Number(sleep), soreness: sore }, savedAt: log?.savedAt ?? new Date().toISOString() });
+          toast(Number(sleep) < 6 || sore >= 4 ? 'CHECKED IN · QUEST LIGHTENED' : 'CHECKED IN');
+        }}
+      >
+        {c ? 'UPDATE CHECK-IN' : 'CHECK IN'}
+      </button>
+    </Card>
+  );
+}
+
+/** Fills cardio tasks from runs, walks and rides recorded in Health Connect. */
+function HealthImport({ date, tasks, current, onImport }: { date: string; tasks: Quest['tasks']; current: Record<string, string | number>; onImport: (v: Record<string, number>) => void }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className="btn btn-sm"
+      style={{ marginTop: 10 }}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const status = await healthStatus();
+          if (status !== 'available') {
+            toast(status === 'update_required' ? 'UPDATE HEALTH CONNECT FROM THE PLAY STORE' : 'HEALTH CONNECT IS NOT ON THIS PHONE');
+            return;
+          }
+          if (!(await connectHealth())) {
+            toast('HEALTH CONNECT ACCESS NOT GRANTED');
+            return;
+          }
+          const day = await readHealthDay(date);
+          const vals: Record<string, number> = {};
+          const notes: string[] = [];
+          for (const t of tasks) {
+            const v = healthValueFor(t, day);
+            if (v && v > Number(current[t.id] ?? 0)) {
+              vals[t.id] = v;
+              notes.push(`${t.label} ${v} ${t.unit}`);
+            }
+          }
+          onImport(vals);
+          toast(notes.length ? `IMPORTED: ${notes.join(' · ')}` : `NOTHING NEW · ${day.steps.toLocaleString()} STEPS TODAY`);
+        } catch (e) {
+          toast(`HEALTH CONNECT: ${(e as Error).message}`);
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? 'READING…' : '♥ IMPORT FROM HEALTH CONNECT'}
+    </button>
+  );
+}

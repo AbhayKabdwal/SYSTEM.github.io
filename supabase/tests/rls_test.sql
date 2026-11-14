@@ -1,7 +1,7 @@
 -- Row-level security checks. Run with: npx supabase test db
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(25);
+select plan(37);
 
 -- Three users via the sign-up trigger.
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -77,12 +77,54 @@ select throws_ok(
   $$ insert into storage.objects (bucket_id, name) values ('vault-media', '00000000-0000-0000-0000-00000000000a/p2.bin') $$,
   null, 'cannot write into someone else''s private photo folder');
 
+select throws_ok(
+  $$ insert into storage.objects (bucket_id, name) values ('avatars', '00000000-0000-0000-0000-00000000000a/44444444-4444-4444-4444-444444444444.jpg') $$,
+  null, 'cannot upload a profile photo for someone else');
+select throws_ok(
+  $$ update public.profiles set avatar_path = '00000000-0000-0000-0000-00000000000a/44444444-4444-4444-4444-444444444444.jpg' where id = '00000000-0000-0000-0000-00000000000c' $$,
+  null, 'profile photo must be in your own folder');
+
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
 select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 0, 'non-follower cannot read a followers-only photo');
 insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c');
 select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 1, 'follower can read the photo');
 select is((select (stats ->> 'weekExp')::int from public.profiles where handle = 'carol'), 420, 'shared stats are visible');
 select is((select count(*)::int from storage.objects where bucket_id = 'vault-media'), 0, 'private photos stay private, even to followers');
+
+-- Guilds: created with the owner as first member, joined only by invite code.
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+insert into public.guilds (name, tag, owner) values ('Night Raid', 'NR', '00000000-0000-0000-0000-00000000000c');
+select is((select role from public.guild_members where user_id = '00000000-0000-0000-0000-00000000000c'), 'owner', 'guild creator becomes owner');
+select set_config('test.code', (select invite_code from public.guilds where tag = 'NR'), true);
+
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+select is((select count(*)::int from public.guilds), 0, 'non-members cannot see a guild');
+select public.join_guild(current_setting('test.code'));
+select is((select count(*)::int from public.guild_members), 2, 'joining by code shows the roster');
+select throws_ok(
+  $$ insert into public.guild_members (guild_id, user_id) select id, '00000000-0000-0000-0000-00000000000a' from public.guilds $$,
+  null, 'cannot add members directly');
+select throws_ok(
+  $$ update public.profiles set league = 5 where id = '00000000-0000-0000-0000-00000000000b' $$,
+  null, 'players cannot promote themselves');
+
+-- Duels: only the two sides see one, and only the opponent can accept.
+insert into public.duels (challenger, opponent) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c');
+select throws_ok(
+  $$ select public.respond_duel((select id from public.duels limit 1), true) $$,
+  null, 'challenger cannot accept their own duel');
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select is((select count(*)::int from public.duels), 1, 'opponent sees the challenge');
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
+select is((select count(*)::int from public.duels), 0, 'outsiders cannot see duels');
+
+-- Boss: everyone sees the total, nobody sees anyone else's hits.
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
+insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000b', '2026-11', 50);
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000c', '2026-11', 30);
+select is((select total::int from public.boss_status('2026-11')), 80, 'boss total adds every hunter');
+select is((select count(*)::int from public.boss_hits), 1, 'you only see your own boss hits');
 
 -- Anonymous visitors see nothing.
 select set_config('role', 'anon', true);

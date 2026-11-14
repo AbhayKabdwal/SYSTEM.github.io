@@ -76,13 +76,24 @@ export async function scheduleReminders(settings: ReminderSettings, ctx: Reminde
   if (!items.length) return;
   const perm = await LocalNotifications.checkPermissions();
   if (perm.display !== 'granted') return;
-  if (!channelReady) {
-    await LocalNotifications.createChannel({ id: CHANNEL, name: 'Daily quests', description: 'Quest arrivals and streak warnings', importance: 4 });
-    channelReady = true;
-  }
+  await ensureChannel();
   await LocalNotifications.schedule({
     notifications: items.map((n) => ({ id: n.id, title: n.title, body: n.body, channelId: CHANNEL, schedule: { at: n.at, allowWhileIdle: true } })),
   });
+}
+
+async function ensureChannel() {
+  if (channelReady) return;
+  await LocalNotifications.createChannel({ id: CHANNEL, name: 'Daily quests', description: 'Quest arrivals and streak warnings', importance: 4 });
+  channelReady = true;
+}
+
+export type PermissionState = 'granted' | 'denied' | 'prompt';
+
+export async function reminderPermission(): Promise<PermissionState> {
+  if (!isNative) return 'denied';
+  const p = (await LocalNotifications.checkPermissions()).display;
+  return p === 'granted' ? 'granted' : p === 'denied' ? 'denied' : 'prompt';
 }
 
 /** Asks for notification permission (Android 13+ shows a prompt). */
@@ -90,4 +101,20 @@ export async function requestReminderPermission(): Promise<boolean> {
   if (!isNative) return false;
   const p = await LocalNotifications.requestPermissions();
   return p.display === 'granted';
+}
+
+/** Fires in a few seconds, so you can check notifications work on this phone. */
+export async function sendTestReminder() {
+  await ensureChannel();
+  await LocalNotifications.schedule({
+    notifications: [
+      {
+        id: ID_BASE - 1,
+        title: '[SYSTEM TEST]',
+        body: 'Notifications are working. The System will remind you of your daily quest.',
+        channelId: CHANNEL,
+        schedule: { at: new Date(Date.now() + 3000), allowWhileIdle: true },
+      },
+    ],
+  });
 }

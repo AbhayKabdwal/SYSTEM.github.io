@@ -14,3 +14,16 @@ export async function compressImage(file: File): Promise<Blob> {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode image'))), 'image/jpeg', QUALITY),
   );
 }
+
+/** Centre-cropped square JPEG, for profile photos. */
+export async function squareImage(file: Blob, size: number): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const edge = Math.min(bitmap.width, bitmap.height);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = Math.min(size, edge);
+  canvas.getContext('2d')!.drawImage(bitmap, (bitmap.width - edge) / 2, (bitmap.height - edge) / 2, edge, edge, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+  return new Promise((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('Could not encode image'))), 'image/jpeg', 0.82),
+  );
+}

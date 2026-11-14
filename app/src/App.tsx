@@ -4,10 +4,19 @@ import { useApp } from './state/store';
 import { useSession } from './state/session';
 import { cloudEnabled } from './cloud/client';
 import { Notifications } from './ui/components';
-import { useLedger, useToday } from './ui/hooks';
-import { addDays, flameFor, weekOf, type Ledger } from './domain';
+import { useLedger, useQuestFor, useToday } from './ui/hooks';
+import { useWidgetSync } from './native/widget';
+import { addDays, flameFor, isUnlocked, monthDamage, monthOf, unlockFor, weekOf, type Feature, type Ledger } from './domain';
 import { publishStats } from './cloud/social';
-import { systemAlert } from './ui/notify';
+import { systemAlert, toast } from './ui/notify';
+import { useUnlockNotices } from './ui/unlocks';
+import { myDuels, reportBossDamage, reportDuelScore } from './cloud/competition';
+import { duelPhase, duelScore } from './cloud/duelScore';
+import { bossJoined } from './features/status/sections';
+import { ReportPage } from './features/progress/ReportPage';
+import { RecordsPage } from './features/progress/RecordsPage';
+import { TimelinePage } from './features/progress/TimelinePage';
+import { GuildPage } from './features/social/Guilds';
 import { StatusPage } from './features/status/StatusPage';
 import { QuestPage } from './features/daily/QuestPage';
 import { BodyPage } from './features/body/BodyPage';
@@ -24,11 +33,11 @@ import { SetupPage } from './features/onboarding/SetupPage';
 import { CalibratePage } from './features/onboarding/CalibratePage';
 import { useReminderScheduler } from './native/useReminders';
 
-const NAV = [
+const NAV: { to: string; icon: string; label: string; feature?: Feature }[] = [
   { to: '/', icon: '◈', label: 'STATUS' },
   { to: '/quest', icon: '⊕', label: 'QUEST' },
-  { to: '/body', icon: '⚇', label: 'BODY' },
-  { to: '/hunters', icon: '♜', label: 'HUNTERS' },
+  { to: '/body', icon: '⚇', label: 'BODY', feature: 'body' },
+  { to: '/hunters', icon: '♜', label: 'HUNTERS', feature: 'hunters' },
   { to: '/more', icon: '≡', label: 'MORE' },
 ];
 
@@ -100,36 +109,78 @@ function DailyNotice({ ledger }: { ledger: Ledger }) {
   return null;
 }
 
-/** Keeps leaderboard stats current while "Share stats" is on. */
-function StatsPublisher({ ledger }: { ledger: Ledger }) {
+/**
+ * Keeps the server side of competition current while signed in: profile stats (if
+ * shared), monthly boss damage (if you joined the hunt) and your duel scores.
+ */
+function CompetitionSync({ ledger }: { ledger: Ledger }) {
   const share = useApp((s) => s.player?.shareStats);
+  const logs = useApp((s) => s.logs);
+  const templates = useApp((s) => s.templates);
   const user = useSession((s) => s.user);
   const today = useToday();
-  const sent = useRef('');
+  const sent = useRef<Record<string, string>>({});
+
+  const once = (key: string, value: unknown, fn: () => Promise<unknown>) => {
+    const v = JSON.stringify(value);
+    if (sent.current[key] === v) return;
+    fn()
+      .then(() => (sent.current[key] = v))
+      .catch(() => undefined);
+  };
+
   useEffect(() => {
     if (!cloudEnabled || !user) return;
-    const stats = share ? { level: ledger.level, rank: ledger.rank, streak: ledger.streak, weekExp: ledger.weekExp, week: weekOf(today)[0]! } : null;
-    const key = JSON.stringify(stats);
-    if (key === sent.current) return;
     const t = setTimeout(() => {
-      publishStats(user.id, stats)
-        .then(() => (sent.current = key))
+      const stats = share
+        ? {
+            level: ledger.level,
+            rank: ledger.rank,
+            streak: ledger.streak,
+            weekExp: ledger.weekExp,
+            weekEp: ledger.weekEp,
+            week: weekOf(today)[0]!,
+            day: today,
+            recentEp: ledger.recentEp,
+            kept: ledger.recentKept.map((k) => (k ? '1' : '0')).join(''),
+          }
+        : null;
+      once('stats', stats, () => publishStats(user.id, stats));
+      if (bossJoined()) {
+        const dmg = monthDamage(ledger, logs, templates, today);
+        once('boss', [monthOf(today), dmg], () => reportBossDamage(user.id, monthOf(today), dmg));
+      }
+      void myDuels()
+        .then((duels) => {
+          for (const d of duels) {
+            const phase = duelPhase(d, today);
+            if (phase !== 'live' && phase !== 'settling') continue;
+            const score = duelScore(ledger, d);
+            once(`duel:${d.id}`, score, () => reportDuelScore(d.id, score));
+          }
+        })
         .catch(() => undefined);
     }, 3000);
     return () => clearTimeout(t);
-  }, [share, user, ledger.level, ledger.rank, ledger.streak, ledger.weekExp, today]);
+  }, [share, user, ledger, logs, templates, today]);
   return null;
 }
 
 function Shell() {
   const ledger = useLedger();
-  useReminderScheduler(ledger, useToday());
+  const ready = useApp((s) => s.ready);
+  const today = useToday();
+  const todayQuest = useQuestFor(today, ledger);
+  const todayProgress = useApp((s) => s.logs[today]?.questProgress);
+  useReminderScheduler(ledger, today);
+  useUnlockNotices(ledger.level, ready);
+  useWidgetSync(ledger, today, todayQuest, todayProgress);
   return (
     <div className={`app${ledger.penaltyToday ? ' penalty-mode' : ''}`}>
       <div className="grid-bg" />
       <div className="glow-bg" />
       <DailyNotice ledger={ledger} />
-      <StatsPublisher ledger={ledger} />
+      <CompetitionSync ledger={ledger} />
       <Header ledger={ledger} />
       <main className="scroll-area">
         <ScrollToTop />
@@ -148,18 +199,36 @@ function Shell() {
           <Route path="/vault" element={<VaultPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/calibrate" element={<CalibratePage />} />
+          <Route path="/report" element={<ReportPage />} />
+          <Route path="/records" element={<RecordsPage />} />
+          <Route path="/timeline" element={<TimelinePage />} />
+          <Route path="/guild/:id" element={<GuildPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
       <nav className="nav" aria-label="Main">
-        {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}>
-            <span className="ni" aria-hidden>
-              {n.icon}
-            </span>
-            {n.label}
-          </NavLink>
-        ))}
+        {NAV.map((n) =>
+          n.feature && !isUnlocked(n.feature, ledger.level) ? (
+            <button
+              key={n.to}
+              className="nav-btn locked"
+              aria-label={`${n.label}, unlocks at level ${unlockFor(n.feature).level}`}
+              onClick={() => toast(`🔒 ${unlockFor(n.feature!).name.toUpperCase()} UNLOCKS AT LEVEL ${unlockFor(n.feature!).level}`)}
+            >
+              <span className="ni" aria-hidden>
+                🔒
+              </span>
+              {n.label}
+            </button>
+          ) : (
+            <NavLink key={n.to} to={n.to} end={n.to === '/'} className={({ isActive }) => `nav-btn${isActive ? ' active' : ''}`}>
+              <span className="ni" aria-hidden>
+                {n.icon}
+              </span>
+              {n.label}
+            </NavLink>
+          ),
+        )}
       </nav>
     </div>
   );

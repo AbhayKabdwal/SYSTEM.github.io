@@ -3,7 +3,7 @@ import { DEFAULT_QUEST_POOL, PENALTY_QUEST, RECOVERY_QUEST } from './defaults';
 import { getFatigue, DELOAD_THRESHOLD } from './fatigue';
 import { LIBRARY, libraryExercise, QUEST_PATTERNS, TIERS, type LibraryExercise, type Tier } from './library';
 import { fits } from './prefs';
-import type { DateStr, Logs, Pattern, Preferences, Quest, QuestTask } from './types';
+import type { Checkin, DateStr, JobClass, Logs, Pattern, Preferences, Quest, QuestTask, StatKey } from './types';
 
 const TASKS_PER_QUEST = 3;
 const MIN_POOL_SIZE = 3;
@@ -81,7 +81,17 @@ function pickVariation(candidates: LibraryExercise[], tier: Tier, rand: () => nu
   return [...candidates].sort((a, b) => a.tiers[0] - b.tiers[0])[0];
 }
 
-function patternWeights(prefs: Preferences): Record<Pattern, number> {
+/** Patterns each stat (and class) favours when spending points tilts the quest. */
+export const STAT_PATTERNS: Record<StatKey, Pattern[]> = {
+  str: ['push', 'pull', 'squat', 'hinge'],
+  agi: ['cardio', 'conditioning'],
+  sen: ['core'],
+  vit: [],
+  int: [],
+};
+const CLASS_PATTERNS: Record<JobClass, Pattern[]> = { fighter: STAT_PATTERNS.str, assassin: STAT_PATTERNS.agi, mage: ['core', 'mobility'] };
+
+function patternWeights(prefs: Preferences, tilt?: Tilt): Record<Pattern, number> {
   const w: Record<Pattern, number> = { push: 1, pull: 1, squat: 1, hinge: 0.7, core: 1, cardio: 0.6, conditioning: 0.6, mobility: 0 };
   const boosts: Record<string, Partial<Record<Pattern, number>>> = {
     strength: { push: 2, pull: 2, squat: 2, hinge: 1, core: 1 },
@@ -93,7 +103,26 @@ function patternWeights(prefs: Preferences): Record<Pattern, number> {
   for (const g of prefs.goals) for (const [p, n] of Object.entries(boosts[g] ?? {}) as [Pattern, number][]) w[p] += n;
   const double = { upper: ['push', 'pull'], lower: ['squat', 'hinge'], core: ['core'], balanced: [] }[prefs.focus] as Pattern[];
   for (const p of double) w[p] *= 2;
+  for (const [stat, pts] of Object.entries(tilt?.statAlloc ?? {}) as [StatKey, number][]) {
+    for (const p of STAT_PATTERNS[stat]) w[p] *= 1 + 0.03 * Math.min(pts, 30);
+  }
+  if (tilt?.jobClass) for (const p of CLASS_PATTERNS[tilt.jobClass]) w[p] *= 1.5;
   return w;
+}
+
+export interface Tilt {
+  statAlloc?: Partial<Record<StatKey, number>>;
+  jobClass?: JobClass;
+}
+
+/** Poor sleep or heavy soreness: the System lightens the day instead of punishing you. */
+export function checkinScale(c: Checkin | undefined): number {
+  if (!c) return 1;
+  let s = 1;
+  if (c.sleep > 0 && c.sleep < 6) s -= 0.15;
+  if (c.soreness >= 4) s -= 0.1;
+  if (c.soreness >= 5) s -= 0.1;
+  return Math.max(0.65, s);
 }
 
 function poolExercises(prefs: Preferences): LibraryExercise[] {
@@ -124,10 +153,21 @@ export interface GenContext {
   prefs: Preferences;
   /** Yesterday's quest. Its patterns are less likely today so muscles get a day off. */
   yesterday?: Quest;
+  tilt?: Tilt;
+  checkin?: Checkin;
 }
 
+/** VIT points add a little volume: half a percent each, up to 15%. */
+const vitScale = (t?: Tilt) => 1 + Math.min(0.15, 0.005 * (t?.statAlloc?.vit ?? 0));
+
 function scaleFor(ctx: GenContext) {
-  return VOLUME_FOR_EXPERIENCE[ctx.prefs.experience] * VOLUME_FOR_MINUTES[ctx.prefs.minutes] * (1 + 0.4 * Math.max(0, Math.min(1, ctx.progress)));
+  return (
+    VOLUME_FOR_EXPERIENCE[ctx.prefs.experience] *
+    VOLUME_FOR_MINUTES[ctx.prefs.minutes] *
+    (1 + 0.4 * Math.max(0, Math.min(1, ctx.progress))) *
+    vitScale(ctx.tilt) *
+    checkinScale(ctx.checkin)
+  );
 }
 
 /** Advanced trainees start one variation up; ranks still gate everything after that. */
@@ -137,7 +177,7 @@ function buildTasks(seed: string, ctx: GenContext, n: number, scale: number, tie
   const rand = rng(seed);
   const pool = poolExercises(ctx.prefs);
   const available = (patterns ?? QUEST_PATTERNS).filter((p) => pool.some((e) => e.pattern === p));
-  const weights = patternWeights(ctx.prefs);
+  const weights = patternWeights(ctx.prefs, ctx.tilt);
   const recent = new Set(ctx.yesterday?.tasks.map((t) => t.pattern ?? libraryExercise(t.id)?.pattern));
   const chosen = patterns ? available.slice(0, n) : sample(available, (p) => weights[p] * (recent.has(p) ? 0.35 : 1), n, rand);
   return chosen
@@ -148,8 +188,9 @@ function buildTasks(seed: string, ctx: GenContext, n: number, scale: number, tie
 
 export function dailyQuest(date: DateStr, ctx: GenContext): Quest {
   const n = TASKS_FOR_MINUTES[ctx.prefs.minutes];
+  const light = checkinScale(ctx.checkin) < 1;
   return {
-    name: `DAILY QUEST · ${TIERS[ctx.tier]}-RANK TRAINING`,
+    name: `DAILY QUEST · ${TIERS[ctx.tier]}-RANK TRAINING${light ? ' (RECOVERY-ADJUSTED)' : ''}`,
     tasks: buildTasks(`daily:${date}`, ctx, n, scaleFor(ctx), variationTier(ctx)),
     kind: 'daily',
     tier: ctx.tier,
@@ -186,14 +227,33 @@ export function trialQuest(nextTier: Tier, prefs: Preferences): Quest {
 
 const DUNGEONS = ['CRIMSON GATE', 'FROSTBOUND CAVERN', 'SUNKEN CITADEL', 'IRON CATACOMBS', 'ASHEN SPIRE', 'HOLLOW WOODS', 'STORM KEEP', 'OBSIDIAN MAZE'];
 
-/** Weekly optional boss run: five patterns at 1.4× volume. */
-export function dungeonQuest(weekStart: DateStr, ctx: GenContext): Quest {
+/**
+ * Weekly optional boss run: five patterns at 1.4× volume. A break (last week's gate was
+ * skipped) is 25% harder and pays 50% more.
+ */
+export function dungeonQuest(weekStart: DateStr, ctx: GenContext, isBreak = false): Quest {
   const rand = rng(`dungeon-name:${weekStart}`);
+  const name = DUNGEONS[Math.floor(rand() * DUNGEONS.length)];
   return {
-    name: `INSTANT DUNGEON: ${DUNGEONS[Math.floor(rand() * DUNGEONS.length)]}`,
-    tasks: buildTasks(`dungeon:${weekStart}`, { ...ctx, yesterday: undefined }, 5, 1.4 * scaleFor(ctx), variationTier(ctx)),
+    name: `${isBreak ? 'DUNGEON BREAK' : 'INSTANT DUNGEON'}: ${name}`,
+    tasks: buildTasks(`dungeon:${weekStart}`, { ...ctx, yesterday: undefined, checkin: undefined }, 5, 1.4 * (isBreak ? 1.25 : 1) * scaleFor({ ...ctx, checkin: undefined }), variationTier(ctx)),
     kind: 'dungeon',
     tier: ctx.tier,
+  };
+}
+
+/**
+ * Job Change questline (level 40): three days, each a full-body test at the next
+ * rank's variations. Same quest each day; the ledger counts clears.
+ */
+export function jobQuest(tier: Tier, prefs: Preferences): Quest {
+  const t = clampTier(tier + 1);
+  const ctx: GenContext = { tier: t, progress: 0, prefs };
+  return {
+    name: 'JOB CHANGE QUEST: PROVE YOUR PATH',
+    tasks: buildTasks(`job:${tier}`, ctx, 5, 1.2 * VOLUME_FOR_EXPERIENCE[prefs.experience], variationTier(ctx), ['push', 'pull', 'squat', 'core', 'conditioning']),
+    kind: 'trial',
+    tier: t,
   };
 }
 
@@ -205,15 +265,16 @@ export interface QuestContext {
   prefs?: Preferences;
   tier?: Tier;
   progress?: number;
+  tilt?: Tilt;
 }
 
 export function questForDate(date: DateStr, ctx: QuestContext): Quest {
-  const { today, penalty = false, pool = DEFAULT_QUEST_POOL, logs = {}, prefs, tier = 0, progress = 0 } = ctx;
+  const { today, penalty = false, pool = DEFAULT_QUEST_POOL, logs = {}, prefs, tier = 0, progress = 0, tilt } = ctx;
   const deload = getFatigue(logs, today) >= DELOAD_THRESHOLD;
   if (penalty) return deload ? RECOVERY_QUEST : prefs ? penaltyQuest(tier, prefs) : PENALTY_QUEST;
   if (date === today && deload) return RECOVERY_QUEST;
   if (!prefs) return randomGate(date, pool);
-  return dailyQuest(date, { tier, progress, prefs, yesterday: logs[addDays(date, -1)]?.dailyQuest });
+  return dailyQuest(date, { tier, progress, prefs, tilt, yesterday: logs[addDays(date, -1)]?.dailyQuest, checkin: logs[date]?.checkin });
 }
 
 /** Tasks the library would consider for a pattern, for the pool editor. */

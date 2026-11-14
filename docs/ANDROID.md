@@ -4,7 +4,7 @@ The Android app is the same React app as the website, wrapped with [Capacitor](h
 
 On top of the website, the app adds:
 
-- **Quest reminders** that work offline: "Daily quest has arrived" in the morning and "Streak at risk" in the evening if today isn't cleared. Set the times under **More → Reminders**.
+- **Quest reminders** that work offline: "Daily quest has arrived" in the morning and "Streak at risk" in the evening if today isn't cleared. The app asks for notification permission on first launch. Set the times, or send a test notification, under **More → Reminders**.
 - **Native camera** for proof and progress photos.
 - **Android back button**: closes dialogs first, then goes back, then minimises the app.
 - **Haptics** on quest clears, level-ups and rank-ups.
@@ -63,6 +63,8 @@ On your phone:
 1. Open `https://github.com/AbhayKabdwal/SYSTEM.github.io/releases/tag/android-latest` and tap **SYSTEM.apk**. (Without the signing key, download the **SYSTEM-apk** artifact from the workflow run instead; it's a zip containing the APK.)
 2. Open the downloaded file. Android asks to allow installs from your browser or Files app: allow it for that app only.
 3. Tap **Install**. For updates, repeat: it installs over the old version and keeps your data.
+
+If notifications never arrive, check Android Settings → Apps → SYSTEM → Notifications is on, and that battery optimisation isn't set to "Restricted" for SYSTEM.
 
 Play Protect may warn that the app is from an unknown developer, because it isn't from the Play Store. Choose **Install anyway**.
 

@@ -12,9 +12,9 @@ const PAGE = 1000;
 /** Don't delete remote files younger than this: another device may be mid-sync. */
 const DELETE_GRACE_MS = 15 * 60 * 1000;
 
-/** Every photo id a log points at. */
-export function referencedPhotos(logs: Logs): Set<string> {
-  const ids = new Set<string>();
+/** Every photo id a log (or the player's profile photo) points at. */
+export function referencedPhotos(logs: Logs, extra: (string | undefined)[] = []): Set<string> {
+  const ids = new Set<string>(extra.filter((x): x is string => !!x));
   for (const l of Object.values(logs)) {
     for (const id of l.photoIds ?? []) if (id) ids.add(id);
     if (l.proof?.photoId) ids.add(l.proof.photoId);
@@ -49,9 +49,9 @@ async function listRemote(userId: string): Promise<Map<string, number>> {
 }
 
 /** Returns how many photos were downloaded, so the UI knows to refresh. */
-export async function syncPhotos(userId: string, key: CryptoKey, logs: Logs, repo: Repo): Promise<number> {
+export async function syncPhotos(userId: string, key: CryptoKey, logs: Logs, repo: Repo, extra: (string | undefined)[] = []): Promise<number> {
   const sb = requireClient();
-  const referenced = referencedPhotos(logs);
+  const referenced = referencedPhotos(logs, extra);
   const local = new Set((await repo.allPhotos()).map((p) => p.id));
   const plan = planMedia(referenced, local, await listRemote(userId), Date.now());
   const path = (id: string) => `${userId}/${id}.bin`;

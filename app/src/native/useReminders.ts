@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createRepo } from '../data/repo';
-import { DEFAULT_REMINDERS, REMINDERS_KEY, scheduleReminders, type ReminderSettings } from './reminders';
+import { DEFAULT_REMINDERS, reminderPermission, REMINDERS_KEY, requestReminderPermission, scheduleReminders, type ReminderSettings } from './reminders';
 import { isNative } from './platform';
 import type { Ledger } from '../domain';
 
@@ -22,13 +22,26 @@ export function useReminderSettings() {
   return { settings, save };
 }
 
+const ASKED_KEY = 'remindersAsked';
+
+/**
+ * Reminders are on by default, but Android 13+ shows nothing until the app has asked
+ * for permission. Ask once, on first launch, then leave it to the settings card.
+ */
+async function askOnce() {
+  if ((await repo.getSetting<boolean>(ASKED_KEY)) || (await reminderPermission()) !== 'prompt') return;
+  await repo.putSetting(ASKED_KEY, true);
+  await requestReminderPermission();
+}
+
 /** Keeps the phone's scheduled reminders in step with today's progress. */
 export function useReminderScheduler(ledger: Ledger, today: string) {
   const { settings } = useReminderSettings();
   const status = ledger.days[today]?.status;
   useEffect(() => {
     if (!isNative || !settings) return;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
+      if (settings.enabled) await askOnce().catch(() => undefined);
       void scheduleReminders(settings, {
         today,
         todayDone: status === 'verified' || status === 'rest',

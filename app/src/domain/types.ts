@@ -78,7 +78,17 @@ export interface Proof {
   featId?: string;
 }
 
-export type SideQuestKind = 'trial' | 'dungeon';
+export type SideQuestKind = 'trial' | 'dungeon' | 'job';
+
+export interface Checkin {
+  /** Hours slept last night. */
+  sleep: number;
+  /** 1 = fresh … 5 = very sore. */
+  soreness: number;
+}
+
+export type StatKey = 'str' | 'agi' | 'vit' | 'sen' | 'int';
+export type JobClass = 'fighter' | 'assassin' | 'mage';
 
 export interface SideQuest {
   quest: Quest;
@@ -103,6 +113,10 @@ export interface DailyLog {
   trainingSavedAt?: string;
   /** Declared rest day. One per Monday–Sunday week keeps the streak alive. */
   rest?: boolean;
+  /** Morning check-in: poor sleep or heavy soreness lightens the day's quest. */
+  checkin?: Checkin;
+  /** Items used on this day. */
+  items?: { scroll?: boolean };
   proof?: Proof;
   side?: Partial<Record<SideQuestKind, SideQuest>>;
 }
@@ -125,6 +139,12 @@ export interface Player {
   rulesSince?: DateStr;
   /** Publish level, rank and streak on your profile for leaderboards. */
   shareStats?: boolean;
+  /** Profile photo in the device photo store (synced encrypted, like other private photos). */
+  avatarId?: string;
+  /** Stat points spent from level-ups (3 per level). They tilt which exercises quests pick. */
+  statAlloc?: Partial<Record<StatKey, number>>;
+  /** Chosen after the level-40 Job Change questline. */
+  jobClass?: JobClass;
 }
 
 export type Goal = 'strength' | 'muscle' | 'endurance' | 'fat_loss' | 'skills';

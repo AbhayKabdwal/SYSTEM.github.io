@@ -1,0 +1,22 @@
+name: Keep Supabase awake
+
+# Free Supabase projects pause after 7 days without activity, and a paused project
+# makes sign-in and sync fail. A tiny read every 3 days counts as activity.
+on:
+  schedule:
+    - cron: '17 6 */3 * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    if: vars.VITE_SUPABASE_URL != ''
+    steps:
+      - name: Read one public row
+        env:
+          URL: ${{ vars.VITE_SUPABASE_URL }}
+          KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+        # RLS hides everything from the anon key, so this returns [] but still hits the database.
+        run: curl -fsS "$URL/rest/v1/profiles?select=id&limit=1" -H "apikey: $KEY" -o /dev/null -w "HTTP %{http_code}\n"

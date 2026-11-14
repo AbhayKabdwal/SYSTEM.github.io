@@ -243,7 +243,8 @@ export const useSession = create<SessionState>((set, get) => {
             syncTimer = setTimeout(() => void get().syncNow(), SYNC_DEBOUNCE_MS);
           }
           // Photos after logs: the vault now lists every photo any device references.
-          const arrived = await syncPhotos(id, deviceKey!, useApp.getState().logs, repo);
+          const { logs, player } = useApp.getState();
+          const arrived = await syncPhotos(id, deviceKey!, logs, repo, [player?.avatarId]);
           if (arrived) set((st) => ({ photoRev: st.photoRev + 1 }));
           set({ sync: 'idle', lastSyncedAt: new Date().toISOString() });
         } catch (e) {

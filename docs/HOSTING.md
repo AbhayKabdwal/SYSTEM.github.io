@@ -49,7 +49,7 @@ Every later push to `main` redeploys. Pull requests run the checks without deplo
 2. **Region:** pick the one closest to your users (Mumbai `ap-south-1` for India).
 3. **Database password:** generate a strong one and store it in your password manager. You'll need it for `db push`.
 
-> Free-tier projects **pause after 7 days without activity**. A paused project means sign-in and sync fail until you press *Restore* in the dashboard. Local data is unaffected. Upgrade, or keep it in use, if others depend on it.
+> Free-tier projects **pause after 7 days without activity**. A paused project means sign-in and sync fail ("Can't reach the server") until you press *Restore* in the dashboard. Local data is unaffected. The **Keep Supabase awake** workflow (`.github/workflows/keepalive.yml`) reads one row every 3 days so this doesn't happen; it uses the same two repo variables as the build.
 
 ### 2. Apply the database schema
 
@@ -78,6 +78,7 @@ The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supa
 - `20261102000000_init.sql`: profiles, encrypted vaults, follows, feats, likes, blocks, reports.
 - `20261103000000_media_and_stats.sql`: the private `feat-media` storage bucket for Followers/Global photos (1 MB limit, JPEG/WebP only) and opt-in leaderboard stats.
 - `20261104000000_private_media.sql`: the owner-only `vault-media` bucket for encrypted backups of Private photos.
+- `20261114000000_avatars.sql`: profile photos (`profiles.avatar_path` and a public `avatars` bucket only the owner can write to).
 
 **"Connection timed out" on `db push`?** Your network blocks the database ports (5432/6543), which is common on campus and office networks. The direct database address is also IPv6-only. Switch to a phone hotspot and rerun. `config push` and the website use HTTPS, so they aren't affected.
 
@@ -91,7 +92,7 @@ The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supa
 npx supabase test db --remote
 ```
 
-All 25 checks should pass.
+All 27 checks should pass.
 
 ### 4. Configure auth
 
@@ -172,6 +173,6 @@ NODE_OPTIONS=--experimental-global-webcrypto npm run build
 | Account page says the build runs fully offline | The repo variables are missing or misspelled. The values are baked in at build time, so run the workflow again after adding them, then reopen the app. |
 | Confirmation email never arrives | Custom SMTP isn't set up (see Part 2, step 4). |
 | "redirect URL not allowed" after clicking an email link | Add the exact site URL, with the trailing slash, to Redirect URLs. |
-| Sync says "Network error" | The Supabase project may be paused. Restore it in the dashboard. |
+| Sign-in or sync says "Can't reach the server" | The project is probably paused. Check with `npx supabase projects list` (status `INACTIVE`), then **Restore project** in the dashboard. The keep-awake workflow prevents it from happening again. |
 | Photo feats fail with "Bucket not found" | The second migration hasn't been applied. Run `npx supabase db push`. |
 | "This device holds another account's data" | Someone else's data is on this browser. Export it if needed, then Data Vault → Erase device data before syncing a different account. |
