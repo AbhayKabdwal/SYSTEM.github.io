@@ -47,8 +47,9 @@ export function useReminderScheduler(ledger: Ledger, today: string) {
         todayDone: status === 'verified' || status === 'rest',
         streak: ledger.streak,
         penaltyToday: ledger.penaltyToday,
+        rank: ledger.rank,
       }).catch(() => undefined);
     }, 1000);
     return () => clearTimeout(t);
-  }, [settings, today, status, ledger.streak, ledger.penaltyToday]);
+  }, [settings, today, status, ledger.streak, ledger.penaltyToday, ledger.rank]);
 }

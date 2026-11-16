@@ -7,8 +7,10 @@ import { choosePhoto } from '../../native/photo';
 import { Avatar } from '../../ui/Avatar';
 import { squareImage } from '../../ui/image';
 import { useSession } from '../../state/session';
+import { nameProblem } from '../../domain';
 import { useApp } from '../../state/store';
 import { Card, Dialog, ErrorText, Field, Sec, Seg } from '../../ui/components';
+import { Collapsible } from '../../ui/Collapsible';
 import { systemAlert, toast } from '../../ui/notify';
 import { timeAgo } from '../../ui/hooks';
 
@@ -122,6 +124,8 @@ function SignUpForm({ onDone }: { onDone: () => void }) {
 
   const submit = run(async () => {
     if (!HANDLE_RE.test(h)) throw new Error('Handle: 3–20 characters, lowercase letters, numbers or _.');
+    const nameErr = nameProblem(h, 'handle') ?? nameProblem(name.trim() || h);
+    if (nameErr) throw new Error(nameErr);
     const pwErr = passwordProblem(password);
     if (pwErr) throw new Error(pwErr);
     if (password !== confirmPw) throw new Error('Passwords do not match.');
@@ -247,7 +251,59 @@ function SignedIn() {
       {s.profile && <ProfileEditor />}
       <BlockedList />
       <AccountActions />
+      <DeleteAccount />
     </div>
+  );
+}
+
+/** Its own section so it's easy to find, with an in-app confirmation (no browser prompt). */
+function DeleteAccount() {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [wipeDevice, setWipeDevice] = useState(false);
+  const { busy, error, run } = useAction();
+  const wipe = useApp((s) => s.wipe);
+  return (
+    <Collapsible id="acc-delete" title="DELETE ACCOUNT" icon="⚠" accent="rgba(255, 64, 96, 0.4)">
+      <p className="prose">
+        Permanently deletes your account from the server: profile, profile photo, encrypted vault and photo backups, feats and their photos,
+        follows, likes, guilds you own, guild memberships, duels and boss damage. This can't be undone.
+      </p>
+      <button className="btn btn-red" onClick={() => setOpen(true)}>
+        DELETE MY ACCOUNT
+      </button>
+      {open && (
+        <Dialog title="DELETE ACCOUNT" onClose={() => setOpen(false)}>
+          <form
+            onSubmit={run(async () => {
+              if (typed !== 'DELETE') throw new Error('Type DELETE in capitals to confirm.');
+              await deleteAccount();
+              if (wipeDevice) await wipe();
+              setOpen(false);
+              systemAlert(wipeDevice ? 'ACCOUNT AND DEVICE DATA DELETED' : 'ACCOUNT DELETED\nYour logs are still on this device.');
+            })}
+          >
+            <p className="prose">This permanently deletes your account and everything stored for it on the server. Nobody can restore it.</p>
+            <label className="check" style={{ margin: '10px 0' }}>
+              <input type="checkbox" checked={wipeDevice} onChange={(e) => setWipeDevice(e.target.checked)} />
+              <span>Also erase everything on this device (logs, photos, settings)</span>
+            </label>
+            <Field label="TYPE DELETE TO CONFIRM">
+              {(id) => <input id={id} className="inp" autoCapitalize="characters" autoComplete="off" value={typed} onChange={(e) => setTyped(e.target.value)} />}
+            </Field>
+            <div className="btn-row">
+              <button type="button" className="btn" onClick={() => setOpen(false)}>
+                CANCEL
+              </button>
+              <button className="btn btn-red" disabled={busy || typed !== 'DELETE'}>
+                {busy ? 'DELETING…' : 'DELETE FOREVER'}
+              </button>
+            </div>
+            <ErrorText error={error} />
+          </form>
+        </Dialog>
+      )}
+    </Collapsible>
   );
 }
 
@@ -382,8 +438,7 @@ function VaultStatusCard() {
   const [dialog, setDialog] = useState<'pass' | 'code' | null>(null);
   const color = s.sync === 'error' ? 'var(--red)' : s.sync === 'syncing' ? 'var(--gold)' : s.sync === 'offline' ? 'var(--dim)' : 'var(--grn)';
   return (
-    <Card>
-      <Sec>ENCRYPTED SYNC</Sec>
+    <Collapsible id="acc-sync" title="ENCRYPTED SYNC" icon="⇄" summary={s.sync === 'idle' ? 'Up to date' : s.sync === 'syncing' ? 'Syncing…' : s.sync === 'offline' ? 'Offline' : 'Sync error'}>
       <div className="kv">
         <span>Status</span>
         <span>
@@ -417,7 +472,7 @@ function VaultStatusCard() {
       </div>
       {dialog === 'pass' && <ChangePassphrase onClose={() => setDialog(null)} />}
       {dialog === 'code' && <NewRecoveryCode onClose={() => setDialog(null)} />}
-    </Card>
+    </Collapsible>
   );
 }
 
@@ -481,10 +536,11 @@ function ProfileEditor() {
   const [bio, setBio] = useState(profile!.bio);
   const { busy, error, run } = useAction();
   return (
-    <Card>
-      <Sec>PUBLIC PROFILE</Sec>
+    <Collapsible id="acc-profile" title="PUBLIC PROFILE" icon="☺" summary={`@${profile!.handle}`}>
       <form
         onSubmit={run(async () => {
+          const problem = nameProblem(name.trim()) ?? nameProblem(bio.trim(), 'text');
+          if (problem) throw new Error(problem);
           await updateProfile(user!.id, { display_name: name.trim() || profile!.handle, bio: bio.trim() });
           await refreshProfile();
           toast('PROFILE SAVED');
@@ -501,7 +557,7 @@ function ProfileEditor() {
       </form>
       <ProfilePhoto />
       <ShareStatsToggle />
-    </Card>
+    </Collapsible>
   );
 }
 
@@ -595,8 +651,7 @@ function BlockedList() {
   }, [me]);
   if (!list?.length) return null;
   return (
-    <Card>
-      <Sec>BLOCKED HUNTERS</Sec>
+    <Collapsible id="acc-blocked" title="BLOCKED HUNTERS" icon="⊘" summary={String(list.length)}>
       {list.map((p) => (
         <div key={p.id} className="row" style={{ padding: '6px 0' }}>
           <span>
@@ -614,7 +669,7 @@ function BlockedList() {
           </button>
         </div>
       ))}
-    </Card>
+    </Collapsible>
   );
 }
 
@@ -623,26 +678,13 @@ function AccountActions() {
   const [pw, setPw] = useState('');
   const { busy, error, run } = useAction();
   return (
-    <Card>
-      <Sec>SECURITY</Sec>
+    <Collapsible id="acc-security" title="PASSWORD & SIGN OUT" icon="⚿">
       <div className="stack">
         <button className="btn" onClick={() => setPwOpen(true)}>
           CHANGE ACCOUNT PASSWORD
         </button>
         <button className="btn" onClick={() => void signOut()}>
           SIGN OUT
-        </button>
-        <button
-          className="btn btn-red"
-          disabled={busy}
-          onClick={run(async () => {
-            if (!confirm('Permanently delete your account, encrypted vault, profile and feats? Data on this device stays.')) return;
-            if (prompt('Type DELETE to confirm') !== 'DELETE') return;
-            await deleteAccount();
-            systemAlert('ACCOUNT DELETED');
-          })}
-        >
-          DELETE ACCOUNT
         </button>
       </div>
       <ErrorText error={error} />
@@ -665,6 +707,6 @@ function AccountActions() {
           </form>
         </Dialog>
       )}
-    </Card>
+    </Collapsible>
   );
 }

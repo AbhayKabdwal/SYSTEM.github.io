@@ -83,9 +83,11 @@ export function usePhotoUrl(id: string | null | undefined) {
   return url;
 }
 
+/** Local date label. Adds the year when it isn't this year, so old records aren't ambiguous. */
 export function fmtDate(d: string, opts: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) {
   const [y, m, day] = d.split('-').map(Number);
-  return new Date(y!, m! - 1, day!, 12).toLocaleDateString(undefined, opts);
+  const withYear = y !== new Date().getFullYear() && !opts.year && (opts.month || opts.day) ? { ...opts, year: 'numeric' as const } : opts;
+  return new Date(y!, m! - 1, day!, 12).toLocaleDateString(undefined, withYear);
 }
 
 export function timeAgo(iso: string) {

@@ -18,3 +18,5 @@ export * from './unlocks';
 export * from './records';
 export * from './report';
 export * from './boss';
+export * from './moderation';
+export * from './demo';

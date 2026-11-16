@@ -2049,3 +2049,346 @@ input[type='date']::-webkit-calendar-picker-indicator {
   padding: 6px 10px;
   font-size: 15px;
 }
+
+.danger-card {
+  border-color: rgba(255, 64, 96, 0.45);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   REFRESH (v3.2): calmer, roomier, more readable. Overrides earlier rules on purpose,
+   so the original layout above stays the single source for structure.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --bg: #050b16;
+  --bg2: #0a1322;
+  --card: #0b1524;
+  --card-hi: #0f1b2e;
+  --border: rgba(140, 180, 230, 0.1);
+  --border-hi: rgba(0, 200, 255, 0.28);
+  --text: #b7c7d9;
+  --dim: #71869e;
+  --bright: #e6f1ff;
+  --bd: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --radius: 14px;
+  --gap: 14px;
+}
+
+html,
+body,
+#root {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Background: one soft glow, no grid. */
+.grid-bg {
+  display: none;
+}
+
+.glow-bg {
+  background: radial-gradient(ellipse 110% 35% at 50% 0%, rgba(0, 90, 200, 0.1) 0%, transparent 70%);
+}
+
+/* Header and nav */
+.hdr {
+  padding: calc(var(--safe-top) + 14px) 20px 14px;
+  background: rgba(5, 11, 22, 0.92);
+}
+
+.logo {
+  font-size: 13px;
+  letter-spacing: 4px;
+}
+
+.rank-icon {
+  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+}
+
+.nav {
+  background: rgba(5, 11, 22, 0.96);
+  padding: 4px 6px var(--safe-bot);
+}
+
+.nav-btn {
+  padding: 10px 2px 10px;
+  border-top: none;
+  border-radius: 12px;
+  font-size: 9px;
+  gap: 5px;
+}
+
+.nav-btn.active {
+  background: rgba(0, 200, 255, 0.08);
+}
+
+/* Page rhythm */
+.page {
+  padding: 20px 20px calc(var(--safe-bot) + 32px);
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: var(--gap);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.02) inset, 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.card::before {
+  display: none;
+}
+
+.card-body {
+  padding: 18px;
+}
+
+.sec {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--glow);
+  margin-bottom: 14px;
+}
+
+.sec::after {
+  display: none;
+}
+
+.label {
+  font-size: 10px;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.prose {
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.prose + .prose {
+  margin-top: 10px;
+}
+
+.hint {
+  font-size: 13px;
+  line-height: 1.55;
+  margin-top: 6px;
+}
+
+.kv {
+  padding: 11px 0;
+  border-bottom-color: rgba(140, 180, 230, 0.07);
+}
+
+.kv:last-child {
+  border-bottom: none;
+}
+
+.stack {
+  gap: 10px;
+}
+
+/* Controls */
+.inp,
+.sel,
+.num-inp {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(140, 180, 230, 0.16);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.num-inp {
+  padding: 9px 6px;
+}
+
+.btn {
+  border-radius: 12px;
+  padding: 14px 18px;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  border-color: rgba(0, 200, 255, 0.55);
+}
+
+.btn-grn {
+  background: rgba(61, 255, 160, 0.08);
+  border-color: rgba(61, 255, 160, 0.6);
+}
+
+.btn-gold {
+  background: rgba(255, 215, 0, 0.07);
+  border-color: rgba(255, 215, 0, 0.6);
+}
+
+.btn-red {
+  border-color: rgba(255, 64, 96, 0.6);
+}
+
+.btn-sm {
+  padding: 9px 14px;
+  border-radius: 10px;
+}
+
+.btn-row {
+  gap: 10px;
+}
+
+.seg {
+  border-radius: 12px;
+  margin-bottom: 16px;
+}
+
+.list-item {
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+
+/* Collapsible rows: quiet until opened */
+.collapsible {
+  background: var(--card);
+}
+
+.coll-head {
+  padding: 16px 18px;
+  gap: 12px;
+}
+
+.coll-title {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--bright);
+}
+
+.coll-sum {
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.collapsible.open {
+  border-color: var(--border-hi);
+}
+
+.coll-body {
+  padding: 0 18px 18px;
+}
+
+/* Status window */
+.rank-card {
+  gap: 16px;
+}
+
+.rank-name {
+  font-size: 16px;
+}
+
+/* Quest rows breathe */
+.quest-row {
+  padding: 12px 0;
+}
+
+/* Feed */
+.feat {
+  padding: 18px;
+}
+
+/* Dialogs and system notices */
+.overlay {
+  background: rgba(2, 6, 14, 0.78);
+  backdrop-filter: blur(6px);
+  padding: 20px;
+}
+
+.dialog {
+  border-radius: 18px;
+  padding: 22px;
+  background: var(--card-hi);
+}
+
+.sys-box {
+  border-radius: 18px;
+  padding: 30px 26px 24px;
+  background: linear-gradient(180deg, #0c1a2e 0%, #081222 100%);
+  border-color: rgba(0, 200, 255, 0.4);
+  box-shadow: 0 0 0 1px rgba(0, 200, 255, 0.08), 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 80px rgba(0, 200, 255, 0.12);
+}
+
+.sys-msg {
+  font-size: 17px;
+  line-height: 1.45;
+}
+
+.sys-detail {
+  font-family: var(--bd);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text);
+  line-height: 1.55;
+  margin-top: 12px;
+  white-space: pre-line;
+}
+
+.toast {
+  border-radius: 12px;
+}
+
+.avatar-btn .avatar-edit {
+  top: auto;
+  bottom: -20px;
+  background: none;
+  font-size: 8px;
+}
+
+.avatar-btn {
+  margin-bottom: 10px;
+}
+
+/* A section heading with a small info toggle instead of paragraphs of help text */
+.info-btn {
+  margin-left: auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(140, 180, 230, 0.3);
+  background: none;
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.info-text {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--dim);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin: -4px 0 14px;
+}
+
+.quiet-link {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 13px;
+  padding: 10px 0;
+  text-align: center;
+  cursor: pointer;
+}
+
+@media (max-width: 360px) {
+  .page {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .card-body {
+    padding: 14px;
+  }
+}

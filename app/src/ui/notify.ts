@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { hapticSuccess } from '../native/haptics';
+import { cueFor, play } from './sound';
 
 interface NotifyState {
   toast: string | null;
@@ -22,6 +23,7 @@ const queue: string[] = [];
 function show(msg: string) {
   useNotify.setState({ sys: msg });
   hapticSuccess();
+  play(cueFor(msg));
   clearTimeout(sysTimer);
   sysTimer = setTimeout(dismissSystemAlert, 4500);
 }

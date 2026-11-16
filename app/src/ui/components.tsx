@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { dismissSystemAlert, useNotify } from './notify';
 
@@ -10,7 +10,23 @@ export function Card({ children, className = '' }: { children: ReactNode; classN
   );
 }
 
-export const Sec = ({ children }: { children: ReactNode }) => <h2 className="sec">{children}</h2>;
+/** Section heading. `info` adds a small (i) toggle, so help text is there when wanted but out of the way. */
+export function Sec({ children, info }: { children: ReactNode; info?: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <h2 className="sec">
+        {children}
+        {info && (
+          <button type="button" className="info-btn" aria-expanded={open} aria-label="What is this?" onClick={() => setOpen((o) => !o)}>
+            {open ? '×' : 'i'}
+          </button>
+        )}
+      </h2>
+      {info && open && <div className="info-text">{info}</div>}
+    </>
+  );
+}
 
 export function Bar({ pct, color }: { pct: number; color: string }) {
   return (
@@ -90,7 +106,8 @@ export function Notifications() {
         <div className="overlay" onClick={dismissSystemAlert} role="alertdialog" aria-live="assertive">
           <div className="sys-box">
             <div className="sys-title">▲ SYSTEM NOTIFICATION ▲</div>
-            <div className="sys-msg">{sys}</div>
+            <div className="sys-msg">{sys.split('\n')[0]}</div>
+            {sys.includes('\n') && <div className="sys-detail">{sys.split('\n').slice(1).join('\n')}</div>}
             <div className="sys-sub">— TAP TO DISMISS —</div>
           </div>
         </div>

@@ -68,6 +68,8 @@ npm run lint && npm run typecheck && npm test && npm run build
 
 Tests run in `Asia/Kolkata` so timezone bugs surface.
 
+**Test hunters:** in the app, tap the version line at the bottom of **More** seven times to turn on developer mode. **Data Vault** then offers generated hunters (level 100 S-Rank, one day before the Job Change, first rank-up trial) built by replaying a real history through the game rules. They replace the device's data, so sign out of sync first or use a test account.
+
 ## Credits
 
 Anatomy art: OpenStax, *Anatomy and Physiology*, figure 11.5 ([CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), via the unlabeled versions on Wikimedia Commons. Labels and leader lines removed and the background made transparent for the muscle map.

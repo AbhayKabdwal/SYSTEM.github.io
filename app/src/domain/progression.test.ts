@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeLedger, EP, freshnessFactor, questShare } from './ledger';
+import { computeLedger, EP, freshnessFactor, ITEM_CAP, questShare } from './ledger';
 import { addDays } from './dates';
 import { QUEST, cleared, missed } from './testUtils';
 import { checkinScale, dailyQuest, dungeonQuest, jobQuest } from './quests';
@@ -124,6 +124,15 @@ describe('items', () => {
     const l = L(logs, addDays(MON, 15));
     expect(l.days[addDays(MON, 15)]!.status).toBe('rest');
     expect(l.inventory.elixir).toBe(0);
+  });
+});
+
+describe('item caps', () => {
+  it('never carries more than the cap', () => {
+    const l = at('x'.repeat(200));
+    expect(l.inventory.scroll).toBeLessThanOrEqual(ITEM_CAP.scroll);
+    expect(l.inventory.shield).toBeLessThanOrEqual(ITEM_CAP.shield);
+    expect(l.inventory.elixir).toBeLessThanOrEqual(ITEM_CAP.elixir);
   });
 });
 

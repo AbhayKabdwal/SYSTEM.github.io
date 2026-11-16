@@ -69,12 +69,14 @@ export function HuntersPage() {
 
   return (
     <div className="page">
-      <button className="btn btn-gold" style={{ marginBottom: 8 }} onClick={() => setComposing(true)}>
-        ◆ SHARE A FEAT ◆
-      </button>
-      <button className="btn btn-sm" style={{ marginBottom: 12 }} onClick={() => setShowJournal((v) => !v)} aria-expanded={showJournal}>
-        🔒 MY PRIVATE FEATS ({journal.entries.length})
-      </button>
+      <div className="btn-row" style={{ marginBottom: 16 }}>
+        <button className="btn btn-gold" onClick={() => setComposing(true)}>
+          ◆ SHARE A FEAT
+        </button>
+        <button className="btn" onClick={() => setShowJournal((v) => !v)} aria-expanded={showJournal}>
+          🔒 PRIVATE ({journal.entries.length})
+        </button>
+      </div>
       {showJournal && <Journal entries={journal.entries} onChange={journal.save} />}
 
       {!online ? (

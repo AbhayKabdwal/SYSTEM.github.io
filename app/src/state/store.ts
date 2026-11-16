@@ -21,6 +21,8 @@ export interface AppState extends AppData {
   /** Apply a merged snapshot from sync without bumping `revision`. */
   applyRemote(data: AppData, stamps: MetaStamps): Promise<void>;
   wipe(): Promise<void>;
+  /** Replaces everything on this device with the given hunter (used by test hunters). */
+  replaceAll(player: Player, logs: Logs): Promise<void>;
 }
 
 const LEGACY_MIGRATED = 'migratedFromV1';
@@ -139,6 +141,13 @@ export function createAppStore(repo: Repo = createRepo(), legacy: () => ReturnTy
         await repo.wipe();
         await repo.putSetting(LEGACY_MIGRATED, true);
         set({ player: null, templates: DEFAULT_TEMPLATES, questPool: DEFAULT_QUEST_POOL, logs: {}, stamps: {}, revision: get().revision + 1 });
+      },
+
+      async replaceAll(player, logs) {
+        await get().wipe();
+        await repo.putLogs(logs);
+        set({ logs });
+        await get().setPlayer(player);
       },
     };
   });

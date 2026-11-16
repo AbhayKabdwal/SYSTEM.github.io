@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createGuild, disbandGuild, guildMembers, joinGuild, leaveGuild, myGuilds, type Guild, type GuildMember } from '../../cloud/competition';
-import { addDays, weekOf } from '../../domain';
+import { addDays, nameProblem, weekOf } from '../../domain';
 import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
 import { Card, ErrorText, Field, Sec } from '../../ui/components';
@@ -85,6 +85,8 @@ export function GuildsPanel() {
         <Sec>CREATE A GUILD</Sec>
         <form
           onSubmit={act(async () => {
+            const problem = nameProblem(name) ?? nameProblem(tag);
+            if (problem) throw new Error(problem);
             const g = await createGuild(me, name, tag);
             toast('GUILD CREATED');
             navigate(`/guild/${g.id}`);

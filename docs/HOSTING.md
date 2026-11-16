@@ -80,6 +80,7 @@ The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supa
 - `20261104000000_private_media.sql`: the owner-only `vault-media` bucket for encrypted backups of Private photos.
 - `20261114000000_avatars.sql`: profile photos (`profiles.avatar_path` and a public `avatars` bucket only the owner can write to).
 - `20261115000000_competition.sql`: guilds, duels, weekly leagues and the monthly boss. It also schedules the Monday league roll with `pg_cron`; if `db push` prints a notice that pg_cron is unavailable, enable it under **Database → Extensions** and push again.
+- `20261116000000_moderation.sql`: refuses offensive handles, display names, bios and guild names, and reserves staff-like handles (admin, support…). The word lists match `app/src/domain/moderation.ts`; change both together.
 
 **"Connection timed out" on `db push`?** Your network blocks the database ports (5432/6543), which is common on campus and office networks. The direct database address is also IPv6-only. Switch to a phone hotspot and rerun. `config push` and the website use HTTPS, so they aren't affected.
 
@@ -93,7 +94,7 @@ The project ref (also called the project ID) is the `xxxx` in `https://xxxx.supa
 npx supabase test db --remote
 ```
 
-All 38 checks should pass.
+All 41 checks should pass.
 
 ### 4. Configure auth
 
@@ -156,6 +157,7 @@ NODE_OPTIONS=--experimental-global-webcrypto npm run build
 
 ## Running it day to day
 
+- **Removing every account** (e.g. to clear test sign-ups): see "Starting over" below.
 - **Reports:** dashboard → **Table Editor → reports**. To remove an abusive feat, delete its row in `feats`, then delete its photo (the `image_path` column) under **Storage → feat-media**. To ban someone, go to **Authentication → Users** and delete or ban the user; their data cascades away.
 - **Backups:** synced vaults are end-to-end encrypted, so a database backup alone can't restore anyone's logs without their passphrase. Encourage users to keep their recovery code and use **Data Vault → Export** now and then.
 - **Lost passphrase *and* recovery code:** nobody, including you, can decrypt that user's synced data. That's the privacy guarantee working as designed. Their local device copy is unaffected.
@@ -164,6 +166,20 @@ NODE_OPTIONS=--experimental-global-webcrypto npm run build
 
 - **Storage use:** photos are compressed to ~100–250 KB each. The free tier includes 1 GB of storage, roughly 5,000 shared photos. Photos of deleted accounts stay in the bucket; clear `feat-media/<user id>/` by hand if you need the space.
 - **Leaderboard honesty:** stats are reported by each player's app, so a determined user can fake them. Treat the leaderboard as a game, not a record.
+
+## Starting over: delete every account
+
+This permanently deletes every user and everything stored for them (profiles, vaults, feats, follows, guilds, duels, boss hits). It can't be undone. Data on people's own devices is not touched.
+
+1. **Storage → each bucket** (`avatars`, `feat-media`, `vault-media`): open it, select all folders, **Delete**. Supabase doesn't allow deleting files from SQL.
+2. **SQL Editor**, run:
+   ```sql
+   delete from auth.users;
+   ```
+   Everything else is removed by cascade.
+3. Check: **Authentication → Users** is empty, and `select count(*) from public.profiles;` returns 0.
+
+Anyone still signed in on a device is signed out the next time the app talks to the server.
 
 ## Troubleshooting
 

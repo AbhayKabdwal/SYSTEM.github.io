@@ -6,8 +6,8 @@ const ctx = { today: '2026-11-13', todayDone: false, streak: 5, penaltyToday: fa
 describe('reminder plan', () => {
   it('schedules a morning and evening reminder per day, skipping times already passed', () => {
     const items = plan(DEFAULT_REMINDERS, ctx, new Date('2026-11-13T12:00:00'));
-    expect(items[0]!.title).toBe('STREAK AT RISK');
-    expect(items[0]!.body).toContain('5-day streak');
+    expect(items[0]!.title).toBe('[WARNING] QUEST INCOMPLETE');
+    expect(items[0]!.body).toMatch(/5/);
     expect(items).toHaveLength(1 + 13 * 2);
   });
 
@@ -18,7 +18,12 @@ describe('reminder plan', () => {
 
   it('warns about the penalty zone in the morning', () => {
     const items = plan(DEFAULT_REMINDERS, { ...ctx, penaltyToday: true }, new Date('2026-11-13T06:00:00'));
-    expect(items[0]!.title).toBe('⚠ PENALTY ZONE');
+    expect(items[0]!.title).toBe('⚠ [PENALTY ZONE]');
+  });
+
+  it('varies the wording from day to day', () => {
+    const bodies = new Set(plan(DEFAULT_REMINDERS, { ...ctx, streak: 0 }, new Date('2026-11-13T06:00:00')).filter((i) => i.title.includes('ARRIVED')).map((i) => i.body));
+    expect(bodies.size).toBeGreaterThan(2);
   });
 
   it('schedules nothing when off, and ids stay unique', () => {

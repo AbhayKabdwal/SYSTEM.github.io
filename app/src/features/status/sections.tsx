@@ -9,6 +9,7 @@ import {
   FLAMES,
   getSkillState,
   ITEMS,
+  ITEM_CAP,
   JOB_DAYS,
   JOB_LEVEL,
   lastWeekStart,
@@ -298,7 +299,7 @@ export function InventoryCard({ ledger, today }: { ledger: Ledger; today: string
       </div>
       {(Object.keys(ITEMS) as ItemKind[]).map((k) => (
         <p className="hint" key={k}>
-          <b>{ITEMS[k].name}:</b> {ITEMS[k].text} <i>From: {ITEMS[k].source}.</i>
+          <b>{ITEMS[k].name}</b> (carry {ITEM_CAP[k]}): {ITEMS[k].text} <i>From: {ITEMS[k].source}.</i>
         </p>
       ))}
       {(inv.scroll > 0 || scrollOn) && (
@@ -317,6 +318,8 @@ export function InventoryCard({ ledger, today }: { ledger: Ledger; today: string
   );
 }
 
+const ARMY_SHOWN = 24;
+
 export function ArmyCard({ ledger }: { ledger: Ledger }) {
   const wounded = ledger.shadows.filter((s) => s.wounded).length;
   return (
@@ -324,8 +327,19 @@ export function ArmyCard({ ledger }: { ledger: Ledger }) {
       {!ledger.shadows.length ? (
         <p className="prose muted">Clear a perfect week, a dungeon or a rank trial to extract your first shadow.</p>
       ) : (
+        <>
+        <div className="pool-summary" style={{ marginBottom: 12 }}>
+          {['S', 'A', 'B', 'C', 'D', 'E'].map((r) => {
+            const n = ledger.shadows.filter((x) => x.rank === r).length;
+            return n ? (
+              <span key={r}>
+                {r}-Rank <b>{n}</b>
+              </span>
+            ) : null;
+          })}
+        </div>
         <div className="shadow-grid">
-          {[...ledger.shadows].reverse().map((s) => (
+          {[...ledger.shadows].reverse().slice(0, ARMY_SHOWN).map((s) => (
             <div key={s.id} className={`shadow-card${s.wounded ? ' wounded' : ''}`} title={`${SOURCE_LABEL[s.source]}, ${fmtDate(s.date)}`}>
               <div className="sh-glyph" aria-hidden>
                 ♞
@@ -337,6 +351,8 @@ export function ArmyCard({ ledger }: { ledger: Ledger }) {
             </div>
           ))}
         </div>
+        {ledger.shadows.length > ARMY_SHOWN && <p className="hint">Showing your newest {ARMY_SHOWN} of {ledger.shadows.length}.</p>}
+        </>
       )}
       <p className="hint" style={{ marginTop: 8 }}>
         A week with a missed day wounds your newest shadow. A perfect week heals the whole army.

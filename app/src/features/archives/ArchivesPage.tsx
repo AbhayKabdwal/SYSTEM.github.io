@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+
+const PAGE = 30;
 import { addDays, logMuscleLoad, MUSCLES, type ExerciseSet } from '../../domain';
 import { useApp } from '../../state/store';
 import { Card, Sec } from '../../ui/components';
@@ -11,6 +14,8 @@ export function ArchivesPage() {
   const { logs, templates } = useApp();
   const ledger = useLedger();
   const dates = Object.keys(logs).sort((a, b) => b.localeCompare(a));
+  // Long histories stay quick: the newest month first, more on request.
+  const [shown, setShown] = useState(PAGE);
   return (
     <div className="page">
       <div className="label" style={{ color: 'var(--glow)', letterSpacing: 3 }}>
@@ -23,7 +28,7 @@ export function ArchivesPage() {
           </p>
         </Card>
       )}
-      {dates.map((d) => {
+      {dates.slice(0, shown).map((d) => {
         const log = logs[d]!;
         const tpl = templates.find((t) => t.id === log.templateId);
         const exCount = Object.values(log.exLogs ?? {}).filter((e) => e.sets?.length).length;
@@ -53,6 +58,11 @@ export function ArchivesPage() {
           </Link>
         );
       })}
+      {dates.length > shown && (
+        <button className="btn btn-sm" style={{ width: '100%' }} onClick={() => setShown((n) => n + PAGE)}>
+          SHOW {Math.min(PAGE, dates.length - shown)} MORE · {dates.length - shown} OLDER DAYS
+        </button>
+      )}
     </div>
   );
 }

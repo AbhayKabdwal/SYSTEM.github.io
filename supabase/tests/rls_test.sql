@@ -21,7 +21,7 @@ create extension if not exists pgtap with schema extensions;
 select set_config('search_path', 'public, extensions, ' || quote_ident(n.nspname), true)
 from pg_extension e join pg_namespace n on n.oid = e.extnamespace
 where e.extname = 'pgtap';
-select plan(38);
+select plan(41);
 
 -- Three users via the sign-up trigger.
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -151,6 +151,14 @@ select set_config('role', 'postgres', true);
 update public.profiles set league = 2 where handle = 'alice';
 select public.roll_leagues();
 select is((select league::int from public.profiles where handle = 'alice'), 1, 'inactive hunters drop a league');
+
+-- Name moderation: offensive or staff-like names are refused, ordinary ones pass.
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select throws_ok(
+  $$ update public.profiles set display_name = 'Sh1t Lord' where id = '00000000-0000-0000-0000-00000000000c' $$,
+  null, 'offensive display names are refused');
+select is(public.handle_available('admin_1'), false, 'staff-like handles are reserved');
+select is(public.handle_available('nazia_runs'), true, 'ordinary names that contain a blocked word still pass');
 
 -- Anonymous visitors see nothing.
 select set_config('role', 'anon', true);

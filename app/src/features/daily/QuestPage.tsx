@@ -34,6 +34,7 @@ import { cloudEnabled } from '../../cloud/client';
 import { deleteFeat, postFeat } from '../../cloud/social';
 import { createRepo } from '../../data/repo';
 import { Card, Sec, Seg } from '../../ui/components';
+import { Collapsible } from '../../ui/Collapsible';
 import { compressImage } from '../../ui/image';
 import { choosePhoto } from '../../native/photo';
 import { isNative } from '../../native/platform';
@@ -297,8 +298,8 @@ export function QuestPage() {
 
       {status === 'rest' && saved?.rest && (
         <Card className="rest-card">
-          <Sec>REST DAY</Sec>
-          <p className="prose">Recovery is part of training. Your streak is safe; momentum starts again tomorrow.</p>
+          <Sec>☾ REST DAY</Sec>
+          <p className="prose">Your streak is safe. Momentum starts again tomorrow.</p>
           {isToday && (
             <button className="btn btn-sm" style={{ marginTop: 10 }} disabled={saving} onClick={() => setRest(false)}>
               CANCEL REST DAY
@@ -307,8 +308,6 @@ export function QuestPage() {
         </Card>
       )}
 
-      {isToday && !saved?.rest && !penalty && prefs && <CheckinCard locked={!!saved?.dailyQuest} />}
-
       {saved?.items?.scroll && (
         <p className="hint" style={{ color: 'var(--gold)', textAlign: 'center' }}>
           📜 EXP Scroll active: double EXP today.
@@ -316,9 +315,18 @@ export function QuestPage() {
       )}
 
       <Card className={penalty ? 'penalty-card' : ''}>
-        <Sec>{penalty ? 'MANDATORY CLEAR' : 'DAILY QUEST'}</Sec>
+        <Sec
+          info={
+            <>
+              Enter how much you did, or tap MAX when a task is done. Clear every task, then add a photo as proof: without proof you keep only half the
+              quest EXP and your streak doesn't grow.
+            </>
+          }
+        >
+          {penalty ? 'MANDATORY CLEAR' : 'DAILY QUEST'}
+        </Sec>
         <div className="label" style={{ color: penalty ? 'var(--red)' : 'var(--bright)' }}>
-          {quest.name}
+          {quest.name.replace(/^DAILY QUEST · /, '')}
         </div>
         {quest.tasks.map((task) => (
           <TaskRow
@@ -338,13 +346,7 @@ export function QuestPage() {
         )}
       </Card>
 
-      {isToday && !!player?.rulesSince && !penalty && !saved?.rest && !isComplete(saved) && restAvailable(ledger, today) && (
-        <button className="btn btn-sm rest-btn" disabled={saving || dirty} onClick={() => setRest(true)} title={dirty ? 'Save or discard your changes first' : undefined}>
-          ☾ TAKE THIS WEEK'S REST DAY
-        </button>
-      )}
-
-      {saved?.rest ? null : (
+      {saved?.rest || (!questCleared && !saved?.proof) ? null : (
         <ProofCard
           isToday={isToday}
           cleared={questCleared}
@@ -408,8 +410,9 @@ export function QuestPage() {
         );
       })}
 
-      <Card>
-        <Sec>RECOVERY</Sec>
+      {isToday && !saved?.rest && !penalty && prefs && <CheckinCard locked={!!saved?.dailyQuest} />}
+
+      <Collapsible id="q-recovery" title="RECOVERY" icon="💧" summary={`${draft.recovery.water}/${waterTarget} water${draft.recovery.creatine ? ' · creatine' : ''}`}>
         <div className="rec-grid">
           <div className="rec-card">
             <div className="label">WATER (GLASSES)</div>
@@ -440,10 +443,9 @@ export function QuestPage() {
             </label>
           </div>
         </div>
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <Sec>TRAINING SESSION (OPTIONAL)</Sec>
+      <Collapsible id="q-training" title="TRAINING" icon="⚔" summary={tpl ? tpl.name : 'Optional'}>
         <label className="label" htmlFor="tpl-select">
           TRAINING TYPE
         </label>
@@ -461,10 +463,9 @@ export function QuestPage() {
           ))}
           {tpl && !tpl.exercises.length && <p className="hint">This training type has no exercises yet. Add some in Training.</p>}
         </div>
+      </Collapsible>
 
-        <div className="label" style={{ marginTop: 14 }}>
-          PROGRESS PHOTOS · PRIVATE, ENCRYPTED BACKUP WITH SYNC
-        </div>
+      <Collapsible id="q-photos" title="PROGRESS PHOTOS" icon="◫" summary={`${draft.photoIds.filter(Boolean).length}/3 · private`}>
         <div className="photo-grid">
           {PHOTO_LABELS.map((lbl, i) => (
             <PhotoSlot
@@ -476,7 +477,13 @@ export function QuestPage() {
             />
           ))}
         </div>
-      </Card>
+      </Collapsible>
+
+      {isToday && !!player?.rulesSince && !penalty && !saved?.rest && !isComplete(saved) && restAvailable(ledger, today) && (
+        <button className="quiet-link" disabled={saving || dirty} onClick={() => setRest(true)} title={dirty ? 'Save or discard your changes first' : undefined}>
+          ☾ Take this week's rest day instead
+        </button>
+      )}
 
       <div style={{ position: 'sticky', bottom: 8, zIndex: 2 }}>
         <button className="btn btn-grn" style={{ background: 'var(--bg)' }} disabled={saving || (!dirty && !!saved)} onClick={save}>
@@ -675,9 +682,8 @@ function ProofCard(props: {
         </>
       ) : (
         <>
-          <p className="prose">
-            The System requires proof. Clear the quest, then snap a photo today. Without proof you keep only {props.share}% of the quest EXP and your streak
-            doesn't grow.
+          <p className="prose" style={{ marginBottom: 14 }}>
+            Quest cleared. Add a photo to verify it: unverified clears keep only {props.share}% of the EXP.
           </p>
           <span className="label">WHO CAN SEE IT</span>
           <Seg
@@ -728,21 +734,11 @@ function CheckinCard({ locked }: { locked: boolean }) {
   const c = log?.checkin;
   const [sleep, setSleep] = useState(String(c?.sleep ?? ''));
   const [sore, setSore] = useState(c?.soreness ?? 2);
-  if (c && locked) {
-    return (
-      <p className="hint" style={{ textAlign: 'center' }}>
-        Check-in: {c.sleep} h sleep · soreness {c.soreness}/5
-      </p>
-    );
-  }
   return (
-    <Card>
-      <Sec>MORNING CHECK-IN</Sec>
-      {locked ? (
-        <p className="hint">Today's quest is already set. Check in before you start tomorrow and the System adjusts it.</p>
-      ) : (
-        <p className="hint">Slept badly or very sore? The System lightens today's quest instead of punishing you.</p>
-      )}
+    <Collapsible id="q-checkin" title="CHECK-IN" icon="◑" summary={c ? `${c.sleep} h sleep · soreness ${c.soreness}/5` : 'How did you sleep?'}>
+      <p className="hint" style={{ marginTop: 0, marginBottom: 12 }}>
+        {locked ? "Today's quest is already set; check in before starting tomorrow." : 'Bad sleep or very sore? Today\'s quest gets lighter.'}
+      </p>
       <div className="rec-grid">
         <label className="label">
           HOURS SLEPT
@@ -750,21 +746,21 @@ function CheckinCard({ locked }: { locked: boolean }) {
         </label>
         <label className="label">
           SORENESS {sore}/5
-          <input type="range" min={1} max={5} value={sore} onChange={(e) => setSore(Number(e.target.value))} style={{ width: '100%' }} />
+          <input type="range" min={1} max={5} value={sore} onChange={(e) => setSore(Number(e.target.value))} style={{ width: '100%', marginTop: 12 }} />
         </label>
       </div>
       <button
         className="btn btn-sm"
-        style={{ marginTop: 8 }}
+        style={{ marginTop: 12 }}
         disabled={!sleep}
         onClick={async () => {
           await saveLog(today, { ...(log ?? {}), checkin: { sleep: Number(sleep), soreness: sore }, savedAt: log?.savedAt ?? new Date().toISOString() });
-          toast(Number(sleep) < 6 || sore >= 4 ? 'CHECKED IN · QUEST LIGHTENED' : 'CHECKED IN');
+          toast(!locked && (Number(sleep) < 6 || sore >= 4) ? 'CHECKED IN · QUEST LIGHTENED' : 'CHECKED IN');
         }}
       >
-        {c ? 'UPDATE CHECK-IN' : 'CHECK IN'}
+        {c ? 'UPDATE' : 'CHECK IN'}
       </button>
-    </Card>
+    </Collapsible>
   );
 }
 

@@ -45,10 +45,30 @@ export async function updatePassword(password: string) {
   if (error) throw error;
 }
 
-/** Deletes the account and, by cascade, the vault, profile, feats, follows and likes. */
+/** Every file the user uploaded, in each bucket, so deleting the account leaves nothing behind. */
+async function removeOwnFiles(userId: string) {
+  const sb = requireClient();
+  for (const bucket of ['avatars', 'feat-media', 'vault-media']) {
+    for (;;) {
+      const { data, error } = await sb.storage.from(bucket).list(userId, { limit: 100 });
+      if (error || !data?.length) break;
+      const { error: rmErr } = await sb.storage.from(bucket).remove(data.map((f) => `${userId}/${f.name}`));
+      if (rmErr) throw rmErr;
+      if (data.length < 100) break;
+    }
+  }
+}
+
+/**
+ * Deletes the account: first your uploaded photos, then (by cascade from the auth user)
+ * vault, profile, feats, follows, likes, guild memberships, guilds you own, duels and boss hits.
+ */
 export async function deleteAccount() {
   const sb = requireClient();
+  const { data } = await sb.auth.getUser();
+  if (data.user) await removeOwnFiles(data.user.id);
   const { error } = await sb.rpc('delete_account');
   if (error) throw error;
-  await sb.auth.signOut();
+  // The server-side session is gone with the user; just forget it locally.
+  await sb.auth.signOut({ scope: 'local' }).catch(() => undefined);
 }

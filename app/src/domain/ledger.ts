@@ -58,6 +58,8 @@ export const EP = {
 } as const;
 
 export const STREAK_MILESTONES = [3, 7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
+/** How many of each item you can carry. Rewards past the cap are lost, so use them. */
+export const ITEM_CAP = { shield: 3, elixir: 3, scroll: 5 } as const;
 /** Streak milestones that also grant a Streak Shield. */
 const SHIELD_MILESTONES = new Set([14, 30, 60, 100, 150, 200, 365]);
 export const STAT_POINTS_PER_LEVEL = 3;
@@ -355,7 +357,7 @@ export function computeLedger(logs: Logs, templates: Template[], player: Player 
       epSide += EP.side;
       events.push({ date: d, kind: 'dungeon', text: `${dungeon.quest.name.replace(/^(INSTANT DUNGEON|DUNGEON BREAK): /, '')} cleared${breakWeek ? ' (break)' : ''}`, exp: gain });
       extract(d, 'dungeon', RANK_GATES[tier]!.rank);
-      if (dungeonClears % 2 === 0) {
+      if (dungeonClears % 2 === 0 && inventory.elixir < ITEM_CAP.elixir) {
         inventory.elixir++;
         events.push({ date: d, kind: 'item', text: 'Found a Rest Elixir', exp: 0 });
       }
@@ -366,7 +368,7 @@ export function computeLedger(logs: Logs, templates: Template[], player: Player 
         if (best < m && m <= streak) {
           day.bonus += EXP.milestonePerDay * m;
           events.push({ date: d, kind: 'milestone', text: `${m}-day streak milestone`, exp: EXP.milestonePerDay * m });
-          if (SHIELD_MILESTONES.has(m)) {
+          if (SHIELD_MILESTONES.has(m) && inventory.shield < ITEM_CAP.shield) {
             inventory.shield++;
             events.push({ date: d, kind: 'item', text: 'Earned a Streak Shield', exp: 0 });
           }
@@ -382,8 +384,9 @@ export function computeLedger(logs: Logs, templates: Template[], player: Player 
         perfectWeeks++;
         const gain = EXP.perfectWeekBase + EXP.perfectWeekPerTier * tier;
         day.bonus += gain;
-        inventory.scroll++;
-        events.push({ date: d, kind: 'perfect_week', text: 'Perfect week: 7 of 7 with no rest day. Found an EXP Scroll', exp: gain });
+        const found = inventory.scroll < ITEM_CAP.scroll;
+        if (found) inventory.scroll++;
+        events.push({ date: d, kind: 'perfect_week', text: `Perfect week: 7 of 7 with no rest day${found ? '. Found an EXP Scroll' : ''}`, exp: gain });
         for (const s of shadows) s.wounded = false;
         extract(d, 'perfect_week', RANK_GATES[tier]!.rank);
       } else if (weekHadMiss || status === 'missed') {

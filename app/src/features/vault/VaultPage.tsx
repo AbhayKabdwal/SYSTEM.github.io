@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
+import { buildDemo, DEMO_PRESETS, todayStr, type DemoPreset } from '../../domain';
+import { devMode, setDevMode } from '../../ui/devMode';
 import { buildBackup, BackupError } from '../../data/backup';
 import { blobToDataUrl } from '../../data/blobs';
 import { createRepo } from '../../data/repo';
 import { Card, ErrorText, Sec } from '../../ui/components';
 import { systemAlert, toast } from '../../ui/notify';
-import { todayStr } from '../../domain';
 
 const repo = createRepo();
 const MB = 1024 * 1024;
@@ -178,6 +179,55 @@ export function VaultPage() {
           ERASE DEVICE DATA
         </button>
       </Card>
+      {devMode() && <TestHunters />}
     </div>
+  );
+}
+
+/** Developer mode only: replace this device's data with a generated hunter to test edge cases. */
+function TestHunters() {
+  const replaceAll = useApp((s) => s.replaceAll);
+  const user = useSession((s) => s.user);
+  const [busy, setBusy] = useState(false);
+  return (
+    <Card className="danger-card">
+      <Sec info="Builds a realistic history and replays it through the normal rules, so levels, ranks, items and shadows are exactly what a real player with that history would see.">
+        TEST HUNTERS
+      </Sec>
+      <p className="prose">Replaces everything on this device with a generated hunter.</p>
+      {user && (
+        <p className="hint" style={{ color: 'var(--gold)' }}>
+          You're signed in: sync would upload this test history to your account. Sign out first, or use a separate test account.
+        </p>
+      )}
+      <div className="stack" style={{ marginTop: 12 }}>
+        {(Object.keys(DEMO_PRESETS) as DemoPreset[]).map((k) => (
+          <button
+            key={k}
+            className="list-item"
+            disabled={busy}
+            onClick={async () => {
+              if (!confirm(`Replace this device's data with "${DEMO_PRESETS[k].label}"? Export a backup first if you need your real data.`)) return;
+              setBusy(true);
+              try {
+                const { player, logs } = buildDemo(k, todayStr());
+                await replaceAll(player, logs);
+                location.hash = '#/';
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <div>
+              <div className="list-title">{DEMO_PRESETS[k].label}</div>
+              <div className="list-sub">{DEMO_PRESETS[k].text}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+      <button className="quiet-link" onClick={() => (setDevMode(false), (location.hash = '#/more'))}>
+        Turn off developer mode
+      </button>
+    </Card>
   );
 }

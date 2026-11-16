@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { bodyFatigue, logMuscleLoad, muscleCapacity, MUSCLES, muscleFatigue, muscleState, recoveryAdvice, type Muscle } from '../../domain';
 import { useApp } from '../../state/store';
 import { Card, Sec } from '../../ui/components';
+import { Collapsible } from '../../ui/Collapsible';
 import { fmtDate, useLedger, useToday } from '../../ui/hooks';
 import { ANATOMY_CREDIT, BodyMap, fatigueColor, LEGEND } from './BodyMap';
 
@@ -32,7 +33,25 @@ export function BodyPage() {
   return (
     <div className="page">
       <Card>
-        <Sec>MUSCLE LOAD</Sec>
+        <Sec
+          info={
+            <>
+              <p style={{ marginBottom: 8 }}>
+          Load is counted in hard sets: sets taken close to failure. Quest totals are converted using a typical hard set for each exercise (about 15
+          push-ups, 25 squats, 45 s of plank). Gym sets are compared with your own recent bests, so 8 reps at 80% of your best counts as a hard set
+          and 8 reps at 50% counts for much less. Add an RPE to a set to say exactly how hard it was.
+        </p>
+        <p style={{ marginBottom: 8 }}>
+          Primary movers take the full set, helpers about half. Fatigue fades with each muscle's recovery half-life: about 30 h for legs and lower
+          back, 26 h for chest and lats, 16–20 h for arms, calves and abs. Around {Math.round(muscleCapacity(tier))} hard sets in a day reads as about
+          63%, and the scale saturates so nothing passes 100%. Higher ranks tolerate slightly more.
+        </p>
+        <p style={{ marginBottom: 8 }}>Custom exercises are matched to muscles by name. You can set them exactly in the Training registry.</p>
+            </>
+          }
+        >
+          MUSCLE LOAD
+        </Sec>
         <div className="row" style={{ marginBottom: 10 }}>
           <span className="prose">{recoveryAdvice(fatigue)}</span>
           <span style={{ fontFamily: 'var(--hd)', fontSize: 18, color: fatigueColor(Math.max(overall, 30)) }}>{overall}%</span>
@@ -48,6 +67,11 @@ export function BodyPage() {
         </div>
         <p className="hint" style={{ textAlign: 'center' }}>
           Tap a muscle for details.
+        </p>
+        <p className="credit">
+          <a href={ANATOMY_CREDIT.url} target="_blank" rel="noreferrer noopener">
+            {ANATOMY_CREDIT.text}
+          </a>
         </p>
       </Card>
 
@@ -79,8 +103,7 @@ export function BodyPage() {
         </Card>
       )}
 
-      <Card>
-        <Sec>ALL MUSCLES</Sec>
+      <Collapsible id="body-all" title="ALL MUSCLES" icon="≣" summary={`Most worked: ${sorted[0]?.label ?? '—'}`}>
         {sorted.map((m) => (
           <button key={m.id} className={`muscle-row${selected === m.id ? ' selected' : ''}`} onClick={() => setSelected(m.id)}>
             <span>{m.label}</span>
@@ -90,27 +113,8 @@ export function BodyPage() {
             <span>{fatigue[m.id]}%</span>
           </button>
         ))}
-      </Card>
+      </Collapsible>
 
-      <Card>
-        <Sec>HOW THIS WORKS</Sec>
-        <p className="prose">
-          Load is counted in hard sets: sets taken close to failure. Quest totals are converted using a typical hard set for each exercise (about 15
-          push-ups, 25 squats, 45 s of plank). Gym sets are compared with your own recent bests, so 8 reps at 80% of your best counts as a hard set
-          and 8 reps at 50% counts for much less. Add an RPE to a set to say exactly how hard it was.
-        </p>
-        <p className="prose">
-          Primary movers take the full set, helpers about half. Fatigue fades with each muscle's recovery half-life: about 30 h for legs and lower
-          back, 26 h for chest and lats, 16–20 h for arms, calves and abs. Around {Math.round(muscleCapacity(tier))} hard sets in a day reads as about
-          63%, and the scale saturates so nothing passes 100%. Higher ranks tolerate slightly more.
-        </p>
-        <p className="prose">Custom exercises are matched to muscles by name. You can set them exactly in the Training registry.</p>
-        <p className="credit">
-          <a href={ANATOMY_CREDIT.url} target="_blank" rel="noreferrer noopener">
-            {ANATOMY_CREDIT.text}
-          </a>
-        </p>
-      </Card>
     </div>
   );
 }
