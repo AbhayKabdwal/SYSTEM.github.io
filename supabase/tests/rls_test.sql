@@ -1,6 +1,26 @@
--- Row-level security checks. Run with: npx supabase test db
+-- Row-level security checks. Run with: npx supabase test db (or --remote).
+-- Safe on a live project: everything runs in one transaction that is rolled back, and every
+-- count is limited to the three test users so real accounts don't skew results.
 begin;
+-- The CLI connects with a temporary login role that may not be allowed to use the schema
+-- pgTAP lives in. Act as postgres for this (rolled-back) transaction when we can, then put
+-- pgTAP's schema on the path. The NOTICE shows what was found if anything still fails.
+do $$
+declare
+  s text;
+begin
+  if pg_has_role(current_user, 'postgres', 'member') then
+    set local role postgres;
+  end if;
+  select n.nspname into s from pg_extension e join pg_namespace n on n.oid = e.extnamespace where e.extname = 'pgtap';
+  raise notice 'pgtap test setup: user=%, pgtap schema=%, usage=%', current_user, coalesce(s, '(not installed)'),
+    case when s is null then false else has_schema_privilege(s, 'usage') end;
+end;
+$$;
 create extension if not exists pgtap with schema extensions;
+select set_config('search_path', 'public, extensions, ' || quote_ident(n.nspname), true)
+from pg_extension e join pg_namespace n on n.oid = e.extnamespace
+where e.extname = 'pgtap';
 select plan(38);
 
 -- Three users via the sign-up trigger.
@@ -9,7 +29,7 @@ insert into auth.users (id, email, raw_user_meta_data) values
   ('00000000-0000-0000-0000-00000000000b', 'b@test.dev', '{"handle":"bob","display_name":"Bob"}'),
   ('00000000-0000-0000-0000-00000000000c', 'c@test.dev', '{"handle":"carol","display_name":"Carol"}');
 
-select is((select count(*)::int from public.profiles), 3, 'sign-up trigger creates profiles');
+select is((select count(*)::int from public.profiles where id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 3, 'sign-up trigger creates profiles');
 
 create function pg_temp.act_as(uid uuid) returns void language sql as $$
   select set_config('role', 'authenticated', true),
@@ -28,27 +48,27 @@ select throws_ok(
 
 -- Bob: cannot see Alice's vault, sees only the public feat until he follows.
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-select is((select count(*)::int from public.vaults), 0, 'vaults are private');
-select is((select count(*)::int from public.vault_keys), 0, 'vault keys are private');
-select is((select count(*)::int from public.feats), 1, 'non-follower sees only public feats');
+select is((select count(*)::int from public.vaults where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'vaults are private');
+select is((select count(*)::int from public.vault_keys where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'vault keys are private');
+select is((select count(*)::int from public.feats where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 1, 'non-follower sees only public feats');
 insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000a');
-select is((select count(*)::int from public.feats), 2, 'follower sees followers-only feats');
+select is((select count(*)::int from public.feats where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 2, 'follower sees followers-only feats');
 select throws_ok(
   $$ insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000c', '00000000-0000-0000-0000-00000000000a') $$,
   null, 'cannot follow on behalf of someone else');
 insert into public.likes (user_id, feat_id) select '00000000-0000-0000-0000-00000000000b', id from public.feats where title = 'public feat';
-select is((select count(*)::int from public.likes), 1, 'can like a visible feat');
+select is((select count(*)::int from public.likes where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 1, 'can like a visible feat');
 update public.profiles set display_name = 'Hacked' where id = '00000000-0000-0000-0000-00000000000a';
 select is((select display_name from public.profiles where handle = 'alice'), 'Alice', 'cannot edit another profile');
 
 -- Alice blocks Bob: follow removed, Bob loses sight of Alice and her feats.
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
 insert into public.blocks (blocker, blocked) values ('00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b');
-select is((select count(*)::int from public.follows), 0, 'block severs follows');
+select is((select count(*)::int from public.follows where follower = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'block severs follows');
 select is((select count(*)::int from public.profiles where handle = 'bob'), 1, 'blocker can still see who they blocked');
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-select is((select count(*)::int from public.feats), 0, 'blocked user sees none of the blocker''s feats');
+select is((select count(*)::int from public.feats where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'blocked user sees none of the blocker''s feats');
 select is((select count(*)::int from public.profiles where handle = 'alice'), 0, 'blocked user cannot see the blocker''s profile');
 select throws_ok(
   $$ insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000a') $$,
@@ -85,11 +105,11 @@ select throws_ok(
   null, 'profile photo must be in your own folder');
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 0, 'non-follower cannot read a followers-only photo');
+select is((select count(*)::int from storage.objects where bucket_id = 'feat-media' and (storage.foldername(name))[1] like '00000000-0000-0000-0000-00000000000_'), 0, 'non-follower cannot read a followers-only photo');
 insert into public.follows (follower, followee) values ('00000000-0000-0000-0000-00000000000b', '00000000-0000-0000-0000-00000000000c');
-select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 1, 'follower can read the photo');
+select is((select count(*)::int from storage.objects where bucket_id = 'feat-media' and (storage.foldername(name))[1] like '00000000-0000-0000-0000-00000000000_'), 1, 'follower can read the photo');
 select is((select (stats ->> 'weekExp')::int from public.profiles where handle = 'carol'), 420, 'shared stats are visible');
-select is((select count(*)::int from storage.objects where bucket_id = 'vault-media'), 0, 'private photos stay private, even to followers');
+select is((select count(*)::int from storage.objects where bucket_id = 'vault-media' and (storage.foldername(name))[1] like '00000000-0000-0000-0000-00000000000_'), 0, 'private photos stay private, even to followers');
 
 -- Guilds: created with the owner as first member, joined only by invite code.
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
@@ -98,9 +118,9 @@ select is((select role from public.guild_members where user_id = '00000000-0000-
 select set_config('test.code', (select invite_code from public.guilds where tag = 'NR'), true);
 
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-select is((select count(*)::int from public.guilds), 0, 'non-members cannot see a guild');
+select is((select count(*)::int from public.guilds where owner = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'non-members cannot see a guild');
 select public.join_guild(current_setting('test.code'));
-select is((select count(*)::int from public.guild_members), 2, 'joining by code shows the roster');
+select is((select count(*)::int from public.guild_members where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 2, 'joining by code shows the roster');
 select throws_ok(
   $$ insert into public.guild_members (guild_id, user_id) select id, '00000000-0000-0000-0000-00000000000a' from public.guilds $$,
   null, 'cannot add members directly');
@@ -114,29 +134,29 @@ select throws_ok(
   $$ select public.respond_duel((select id from public.duels limit 1), true) $$,
   null, 'challenger cannot accept their own duel');
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
-select is((select count(*)::int from public.duels), 1, 'opponent sees the challenge');
+select is((select count(*)::int from public.duels where challenger = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 1, 'opponent sees the challenge');
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000a');
-select is((select count(*)::int from public.duels), 0, 'outsiders cannot see duels');
+select is((select count(*)::int from public.duels where challenger = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'outsiders cannot see duels');
 
 -- Boss: everyone sees the total, nobody sees anyone else's hits.
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000b');
-insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000b', '2026-11', 50);
+insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000b', '2099-01', 50);
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
-insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000c', '2026-11', 30);
-select is((select total::int from public.boss_status('2026-11')), 80, 'boss total adds every hunter');
-select is((select count(*)::int from public.boss_hits), 1, 'you only see your own boss hits');
+insert into public.boss_hits (user_id, month, damage) values ('00000000-0000-0000-0000-00000000000c', '2099-01', 30);
+select is((select total::int from public.boss_status('2099-01')), 80, 'boss total adds every hunter');
+select is((select count(*)::int from public.boss_hits where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 1, 'you only see your own boss hits');
 
 -- Weekly league roll (runs as the database owner via pg_cron): inactive hunters drop a league.
-reset role;
+select set_config('role', 'postgres', true);
 update public.profiles set league = 2 where handle = 'alice';
 select public.roll_leagues();
 select is((select league::int from public.profiles where handle = 'alice'), 1, 'inactive hunters drop a league');
 
 -- Anonymous visitors see nothing.
 select set_config('role', 'anon', true);
-select is((select count(*)::int from storage.objects where bucket_id = 'feat-media'), 0, 'anon sees no photos');
-select is((select count(*)::int from public.feats), 0, 'anon sees no feats');
-select is((select count(*)::int from public.profiles), 0, 'anon sees no profiles');
+select is((select count(*)::int from storage.objects where bucket_id = 'feat-media' and (storage.foldername(name))[1] like '00000000-0000-0000-0000-00000000000_'), 0, 'anon sees no photos');
+select is((select count(*)::int from public.feats where user_id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'anon sees no feats');
+select is((select count(*)::int from public.profiles where id = any('{00000000-0000-0000-0000-00000000000a,00000000-0000-0000-0000-00000000000b,00000000-0000-0000-0000-00000000000c}'::uuid[])), 0, 'anon sees no profiles');
 
 select * from finish();
 rollback;
