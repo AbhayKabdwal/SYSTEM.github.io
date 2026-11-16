@@ -79,6 +79,14 @@ export function createRepo(db: SystemDB = defaultDb) {
     deletePhoto: (id: string) => db.photos.delete(id),
     allPhotos: () => db.photos.toArray(),
 
+    /** Logs and the synced settings only; photos and device settings stay. */
+    async clearData() {
+      await db.transaction('rw', db.meta, db.logs, async () => {
+        await db.logs.clear();
+        await db.meta.bulkDelete(['player', 'templates', 'questPool']);
+      });
+    },
+
     /** Removes everything on this device. */
     async wipe() {
       await db.transaction('rw', db.meta, db.logs, db.photos, async () => {

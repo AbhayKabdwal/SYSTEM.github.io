@@ -24,7 +24,8 @@ import { Avatar } from '../../ui/Avatar';
 import { achievements, RANK_GATES, type Achievement, type Visibility } from '../../domain';
 import { createRepo, uid } from '../../data/repo';
 import { useApp } from '../../state/store';
-import { useSession } from '../../state/session';
+import { useMeId, useNetworkOnline } from '../../cloud/demoHooks';
+import { demoNet, setDemoNet } from '../../cloud/demoNetwork';
 import { Card, Dialog, ErrorText, Field, Sec, Seg } from '../../ui/components';
 import { compressImage } from '../../ui/image';
 import { choosePhoto } from '../../native/photo';
@@ -57,7 +58,7 @@ function useJournal() {
 }
 
 export function HuntersPage() {
-  const user = useSession((s) => s.user);
+  const sample = demoNet();
   const navTab = (useLocation().state as { tab?: Tab } | null)?.tab;
   const [tab, setTab] = useState<Tab>(navTab ?? 'feed');
   const [feedScope, setFeedScope] = useState<'following' | 'explore'>('following');
@@ -65,7 +66,7 @@ export function HuntersPage() {
   const [showJournal, setShowJournal] = useState(false);
   const [reload, setReload] = useState(0);
   const journal = useJournal();
-  const online = cloudEnabled && !!user;
+  const online = useNetworkOnline();
 
   return (
     <div className="page">
@@ -79,6 +80,14 @@ export function HuntersPage() {
       </div>
       {showJournal && <Journal entries={journal.entries} onChange={journal.save} />}
 
+      {sample && (
+        <div className="sample-banner">
+          SAMPLE NETWORK · made-up hunters, nothing is sent anywhere
+          <button className="link-btn" onClick={() => (setDemoNet(false), location.reload())}>
+            turn off
+          </button>
+        </div>
+      )}
       {!online ? (
         <Card>
           <Sec>HUNTERS NETWORK</Sec>
@@ -183,7 +192,7 @@ function LocalPhoto({ id }: { id: string | null }) {
 }
 
 export function FeedList({ scopeKind, userId }: { scopeKind: 'following' | 'explore' | 'user'; userId?: string }) {
-  const me = useSession((s) => s.user!.id);
+  const me = useMeId()!;
   const [items, setItems] = useState<Feat[]>([]);
   const [done, setDone] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -346,7 +355,7 @@ export function ReportButton({ me, target, onDone }: { me: string; target: { fea
 }
 
 function Composer({ online, onClose, onPosted }: { online: boolean; onClose: () => void; onPosted: (v: Visibility) => void }) {
-  const me = useSession((s) => s.user?.id);
+  const me = useMeId();
   const { logs, templates } = useApp();
   const ledger = useLedger();
   const today = useToday();

@@ -74,6 +74,7 @@ export function buildDemo(preset: DemoPreset, today: DateStr): { player: Player;
       rulesSince: start,
       waterTarget: 8,
       prefs,
+      test: true,
     },
     logs,
   };

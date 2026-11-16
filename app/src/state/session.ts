@@ -223,6 +223,8 @@ export const useSession = create<SessionState>((set, get) => {
     async syncNow() {
       const id = userId();
       if (!id || !deviceKey || get().vault !== 'unlocked') return;
+      // A test hunter must never reach a real account.
+      if (useApp.getState().player?.test) return;
       if (!navigator.onLine) {
         set({ sync: 'offline' });
         return;

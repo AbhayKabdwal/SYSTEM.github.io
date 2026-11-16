@@ -4,14 +4,14 @@ import { cancelDuel, DUEL_DAYS, myDuels, profilesByIds, respondDuel, type Duel }
 import { duelPhase, duelScore } from '../../cloud/duelScore';
 import { avatarUrl, type Profile } from '../../cloud/social';
 import { addDays } from '../../domain';
-import { useSession } from '../../state/session';
+import { useMeId } from '../../cloud/demoHooks';
 import { Avatar } from '../../ui/Avatar';
 import { Card, ErrorText, Sec } from '../../ui/components';
 import { fmtDate, useLedger, useToday } from '../../ui/hooks';
 import { toast } from '../../ui/notify';
 
 export function DuelsPanel() {
-  const me = useSession((s) => s.user!.id);
+  const me = useMeId()!;
   const today = useToday();
   const ledger = useLedger();
   const [duels, setDuels] = useState<Duel[] | null>(null);

@@ -5,6 +5,8 @@ import { leagueOf, LEAGUES } from '../../cloud/competition';
 import { RANK_GATES, weekOf } from '../../domain';
 import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
+import { useMeId } from '../../cloud/demoHooks';
+import { demo, DEMO_ME, demoNet } from '../../cloud/demoNetwork';
 import { Avatar } from '../../ui/Avatar';
 import { Card, ErrorText, Sec, Seg } from '../../ui/components';
 import { useToday } from '../../ui/hooks';
@@ -38,8 +40,9 @@ export function BoardRows({ rows, me, zones }: { rows: Profile[]; me: string; zo
 
 /** Weekly Effort Points: your league, the people you follow, or everyone. */
 export function LeagueBoard() {
-  const me = useSession((s) => s.user!.id);
-  const myLeague = useSession((s) => s.profile?.league ?? 0);
+  const me = useMeId()!;
+  const realLeague = useSession((s) => s.profile?.league ?? 0);
+  const myLeague = demoNet() ? demo.profile(DEMO_ME).league : realLeague;
   const share = useApp((s) => s.player?.shareStats);
   const today = useToday();
   const week = weekOf(today)[0]!;
@@ -79,7 +82,7 @@ export function LeagueBoard() {
           { value: 'global', label: 'GLOBAL' },
         ]}
       />
-      {!share && (
+      {!share && !demoNet() && (
         <p className="hint" style={{ color: 'var(--gold)' }}>
           You're not on the board. Turn on <Link to="/account">Share stats</Link> to compete.
         </p>

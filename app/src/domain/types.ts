@@ -145,6 +145,8 @@ export interface Player {
   statAlloc?: Partial<Record<StatKey, number>>;
   /** Chosen after the level-40 Job Change questline. */
   jobClass?: JobClass;
+  /** A generated test hunter (developer mode). Never synced or published. */
+  test?: boolean;
 }
 
 export type Goal = 'strength' | 'muscle' | 'endurance' | 'fat_loss' | 'skills';

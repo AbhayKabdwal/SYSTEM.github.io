@@ -21,11 +21,17 @@ export interface AppState extends AppData {
   /** Apply a merged snapshot from sync without bumping `revision`. */
   applyRemote(data: AppData, stamps: MetaStamps): Promise<void>;
   wipe(): Promise<void>;
-  /** Replaces everything on this device with the given hunter (used by test hunters). */
+  /**
+   * Swaps in a test hunter. The real hunter is saved first (once, so trying several
+   * test hunters still keeps the original) and comes back with restoreReal().
+   */
   replaceAll(player: Player, logs: Logs): Promise<void>;
+  restoreReal(): Promise<boolean>;
 }
 
 const LEGACY_MIGRATED = 'migratedFromV1';
+/** Your real hunter, kept while a test hunter is loaded. */
+export const REAL_SNAPSHOT = 'realHunterSnapshot';
 
 export function createAppStore(repo: Repo = createRepo(), legacy: () => ReturnType<typeof loadLegacyData> | null = safeLegacy) {
   return create<AppState>((set, get) => {
@@ -144,10 +150,30 @@ export function createAppStore(repo: Repo = createRepo(), legacy: () => ReturnTy
       },
 
       async replaceAll(player, logs) {
-        await get().wipe();
+        const s = get();
+        if (!(await repo.getSetting(REAL_SNAPSHOT)) && s.player && !s.player.test) {
+          await repo.putSetting(REAL_SNAPSHOT, { player: s.player, templates: s.templates, questPool: s.questPool, logs: s.logs, stamps: s.stamps });
+        }
+        await repo.clearData();
         await repo.putLogs(logs);
-        set({ logs });
+        await repo.putMeta('templates', DEFAULT_TEMPLATES);
+        await repo.putMeta('questPool', DEFAULT_QUEST_POOL);
+        set({ logs, templates: DEFAULT_TEMPLATES, questPool: DEFAULT_QUEST_POOL });
         await get().setPlayer(player);
+      },
+
+      async restoreReal() {
+        const snap = await repo.getSetting<AppData & { stamps: MetaStamps }>(REAL_SNAPSHOT);
+        await repo.clearData();
+        if (snap) {
+          await repo.putLogs(snap.logs);
+          for (const k of ['player', 'templates', 'questPool'] as const) if (snap[k]) await repo.putMeta(k, snap[k], snap.stamps[k]);
+          await repo.putSetting(REAL_SNAPSHOT, null);
+          set({ player: snap.player, templates: snap.templates, questPool: snap.questPool, logs: snap.logs, stamps: snap.stamps, revision: get().revision + 1 });
+          return true;
+        }
+        set({ player: null, templates: DEFAULT_TEMPLATES, questPool: DEFAULT_QUEST_POOL, logs: {}, stamps: {}, revision: get().revision + 1 });
+        return false;
       },
     };
   });

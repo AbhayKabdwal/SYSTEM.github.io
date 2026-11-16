@@ -465,6 +465,7 @@ export function SkillTreeCard() {
   const [tree, setTree] = useState(SKILL_TREES[0]!.id);
   const activeTree = SKILL_TREES.find((t) => t.id === tree)!;
   const unlocked = Object.values(skills.unlocked).filter(Boolean).length;
+  const hasSkillsType = templates.some((t) => t.id === 'tpl_skills');
   return (
     <Collapsible id="skills" title="MASTERY TREES" icon="⌬" summary={`${unlocked} skill${unlocked === 1 ? '' : 's'} unlocked`}>
       <div className="seg" role="tablist" aria-label="Skill tree">
@@ -495,9 +496,15 @@ export function SkillTreeCard() {
           );
         })}
       </div>
-      <p className="hint" style={{ marginTop: 10 }}>
-        Log skill work with a "stage" exercise (see the Calisthenics Skills training type).
-      </p>
+      {hasSkillsType ? (
+        <Link className="btn btn-sm" style={{ marginTop: 12, width: '100%' }} to="/quest" state={{ template: 'tpl_skills' }}>
+          LOG SKILL WORK
+        </Link>
+      ) : (
+        <p className="hint" style={{ marginTop: 10 }}>
+          Add a training type with "Skill stage" exercises in Training to log skill work.
+        </p>
+      )}
     </Collapsible>
   );
 }

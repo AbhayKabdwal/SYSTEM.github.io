@@ -4,14 +4,14 @@ import { RANK_GATES } from '../../domain';
 import { avatarUrl, block, follow, followCounts, followingIds, profileByHandle, unfollow, type Profile } from '../../cloud/social';
 import { Avatar } from '../../ui/Avatar';
 import { challenge, leagueOf } from '../../cloud/competition';
-import { useSession } from '../../state/session';
+import { useMeId } from '../../cloud/demoHooks';
 import { Card, ErrorText, Sec } from '../../ui/components';
 import { toast } from '../../ui/notify';
 import { FeedList, ReportButton } from './HuntersPage';
 
 export function ProfilePage() {
   const { handle = '' } = useParams();
-  const me = useSession((s) => s.user?.id);
+  const me = useMeId();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null | undefined>(undefined);
   const [counts, setCounts] = useState({ followers: 0, following: 0 });

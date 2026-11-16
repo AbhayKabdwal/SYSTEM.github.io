@@ -37,7 +37,7 @@ export function SetupPage() {
             submitLabel="◆ ACCEPT THE SYSTEM ◆"
             onSubmit={async (prefs) => {
               await setPlayer({ name: n, createdAt: new Date().toISOString(), waterTarget: 8, prefs, rulesSince: todayStr() });
-              systemAlert(`WELCOME TO THE SYSTEM\n${n}\nClear your daily quest and attach proof every day. Missing a day has a penalty.`);
+              systemAlert(`WELCOME TO THE SYSTEM\n${n}\nClear your daily quest and attach proof every day. New features unlock as you level up; More → Guide explains each one.`);
             }}
           />
           <button type="button" className="link-btn" style={{ marginTop: 12 }} onClick={() => setStep('name')}>

@@ -3,7 +3,8 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { createGuild, disbandGuild, guildMembers, joinGuild, leaveGuild, myGuilds, type Guild, type GuildMember } from '../../cloud/competition';
 import { addDays, nameProblem, weekOf } from '../../domain';
 import { useApp } from '../../state/store';
-import { useSession } from '../../state/session';
+import { useMeId } from '../../cloud/demoHooks';
+import { demoNet } from '../../cloud/demoNetwork';
 import { Card, ErrorText, Field, Sec } from '../../ui/components';
 import { useToday } from '../../ui/hooks';
 import { toast } from '../../ui/notify';
@@ -13,7 +14,7 @@ import { BoardRows } from './LeagueBoard';
 export const GUILD_EP_PER_MEMBER = 250;
 
 export function GuildsPanel() {
-  const me = useSession((s) => s.user!.id);
+  const me = useMeId()!;
   const [guilds, setGuilds] = useState<Guild[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -129,7 +130,7 @@ export function guildStreak(members: GuildMember[], today: string): number {
 
 export function GuildPage() {
   const { id = '' } = useParams();
-  const me = useSession((s) => s.user?.id);
+  const me = useMeId();
   const share = useApp((s) => s.player?.shareStats);
   const today = useToday();
   const navigate = useNavigate();
@@ -211,7 +212,7 @@ export function GuildPage() {
           Guild streak counts days when every member who shares stats kept their streak (cleared with proof, rested, or used a shield).
           {hidden ? ` ${hidden} member${hidden > 1 ? 's' : ''} don't share stats and aren't counted.` : ''}
         </p>
-        {!share && (
+        {!share && !demoNet() && (
           <p className="hint" style={{ color: 'var(--gold)' }}>
             Your guild can't see your progress. Turn on <Link to="/account">Share stats</Link>.
           </p>

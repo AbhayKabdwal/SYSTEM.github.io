@@ -1,5 +1,6 @@
 import type { AchievementKind } from '../domain';
 import { requireClient } from './client';
+import { demo, demoNet } from './demoNetwork';
 
 export interface PublicStats {
   level: number;
@@ -16,6 +17,8 @@ export interface PublicStats {
   recentEp?: number[];
   /** "1" where that day kept the streak alive (cleared with proof, rest, or shield). */
   kept?: string;
+  /** First logged day; the server checks level and streak are reachable since then. */
+  since?: string;
 }
 
 export interface Profile {
@@ -56,17 +59,20 @@ const BUCKET = 'feat-media';
 const SIGNED_URL_SECONDS = 60 * 60;
 
 export async function myProfile(userId: string): Promise<Profile | null> {
+  if (demoNet()) return demo.myProfile();
   const { data, error } = await requireClient().from('profiles').select(PROFILE_COLS).eq('id', userId).maybeSingle();
   if (error) throw error;
   return data;
 }
 
 export async function updateProfile(userId: string, patch: Partial<Pick<Profile, 'display_name' | 'bio'>>) {
+  if (demoNet()) return undefined;
   const { error } = await requireClient().from('profiles').update(patch).eq('id', userId);
   if (error) throw error;
 }
 
 export async function profileByHandle(handle: string): Promise<Profile | null> {
+  if (demoNet()) return demo.profileByHandle(handle);
   const { data, error } = await requireClient().from('profiles').select(PROFILE_COLS).eq('handle', handle).maybeSingle();
   if (error) throw error;
   return data;
@@ -74,6 +80,7 @@ export async function profileByHandle(handle: string): Promise<Profile | null> {
 
 /** Username (handle) or display name, anywhere in the text. Exact and prefix handle matches first. */
 export async function searchProfiles(q: string): Promise<Profile[]> {
+  if (demoNet()) return demo.search(q);
   const raw = q.trim().replace(/^@/, '');
   const handle = raw.toLowerCase().replace(/[^a-z0-9_]/g, '');
   // Letters, digits, spaces only: commas and brackets would break the filter syntax.
@@ -87,6 +94,7 @@ export async function searchProfiles(q: string): Promise<Profile[]> {
 }
 
 export async function followCounts(userId: string) {
+  if (demoNet()) return demo.followCounts(userId);
   const sb = requireClient();
   const [followers, following] = await Promise.all([
     sb.from('follows').select('*', { count: 'exact', head: true }).eq('followee', userId),
@@ -96,32 +104,38 @@ export async function followCounts(userId: string) {
 }
 
 export async function followingIds(me: string): Promise<Set<string>> {
+  if (demoNet()) return demo.followingIds();
   const { data, error } = await requireClient().from('follows').select('followee').eq('follower', me);
   if (error) throw error;
   return new Set((data ?? []).map((r) => r.followee as string));
 }
 
 export async function follow(me: string, other: string) {
+  if (demoNet()) return demo.follow(other);
   const { error } = await requireClient().from('follows').insert({ follower: me, followee: other });
   if (error && error.code !== '23505') throw error;
 }
 
 export async function unfollow(me: string, other: string) {
+  if (demoNet()) return demo.unfollow(other);
   const { error } = await requireClient().from('follows').delete().eq('follower', me).eq('followee', other);
   if (error) throw error;
 }
 
 export async function block(me: string, other: string) {
+  if (demoNet()) return undefined;
   const { error } = await requireClient().from('blocks').insert({ blocker: me, blocked: other });
   if (error && error.code !== '23505') throw error;
 }
 
 export async function unblock(me: string, other: string) {
+  if (demoNet()) return undefined;
   const { error } = await requireClient().from('blocks').delete().eq('blocker', me).eq('blocked', other);
   if (error) throw error;
 }
 
 export async function blockedProfiles(me: string): Promise<Profile[]> {
+  if (demoNet()) return [];
   const sb = requireClient();
   const { data, error } = await sb.from('blocks').select('blocked').eq('blocker', me);
   if (error) throw error;
@@ -133,6 +147,7 @@ export async function blockedProfiles(me: string): Promise<Profile[]> {
 }
 
 export async function report(me: string, target: { featId?: string; userId?: string }, reason: string) {
+  if (demoNet()) return undefined;
   const { error } = await requireClient()
     .from('reports')
     .insert({ reporter: me, feat_id: target.featId ?? null, reported_user: target.userId ?? null, reason });
@@ -148,6 +163,7 @@ export async function postFeat(
   feat: { kind: Feat['kind']; title: string; body: string; visibility: Visibility },
   image?: Blob,
 ): Promise<string> {
+  if (demoNet()) return demo.post(feat);
   const sb = requireClient();
   let image_path: string | null = null;
   if (image) {
@@ -164,6 +180,7 @@ export async function postFeat(
 }
 
 export async function deleteFeat(id: string, imagePath?: string | null) {
+  if (demoNet()) return demo.deleteFeat(id);
   const sb = requireClient();
   const { error } = await sb.from('feats').delete().eq('id', id);
   if (error) throw error;
@@ -195,6 +212,7 @@ export async function setAvatar(me: string, image: Blob | null, oldPath: string 
 
 /** Publishes (or with null, withdraws) leaderboard stats on your profile. */
 export async function publishStats(me: string, stats: PublicStats | null) {
+  if (demoNet()) return undefined;
   const { error } = await requireClient().from('profiles').update({ stats }).eq('id', me);
   if (error) throw error;
 }
@@ -203,6 +221,7 @@ export type BoardScope = { kind: 'following'; ids: string[] } | { kind: 'global'
 
 /** Weekly Effort Points leaderboard among hunters who share stats. */
 export async function leaderboard(scope: BoardScope, week: string): Promise<Profile[]> {
+  if (demoNet()) return demo.leaderboard(scope);
   let q = requireClient()
     .from('profiles')
     .select(PROFILE_COLS)
@@ -221,6 +240,7 @@ export type FeedScope = { kind: 'following'; me: string; following: string[] } |
 
 /** RLS already hides anything the viewer may not see; scopes only narrow it down. */
 export async function feed(me: string, scope: FeedScope, before?: string): Promise<Feat[]> {
+  if (demoNet()) return demo.feed(scope.kind, scope.kind === 'user' ? scope.userId : undefined);
   const sb = requireClient();
   let q = sb
     .from('feats')
@@ -261,11 +281,13 @@ export async function feed(me: string, scope: FeedScope, before?: string): Promi
 }
 
 export async function like(me: string, featId: string) {
+  if (demoNet()) return demo.like(featId);
   const { error } = await requireClient().from('likes').insert({ user_id: me, feat_id: featId });
   if (error && error.code !== '23505') throw error;
 }
 
 export async function unlike(me: string, featId: string) {
+  if (demoNet()) return demo.unlike(featId);
   const { error } = await requireClient().from('likes').delete().eq('user_id', me).eq('feat_id', featId);
   if (error) throw error;
 }

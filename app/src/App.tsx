@@ -10,6 +10,7 @@ import { addDays, flameFor, isUnlocked, monthDamage, monthOf, unlockFor, weekOf,
 import { publishStats } from './cloud/social';
 import { systemAlert, toast } from './ui/notify';
 import { useUnlockNotices } from './ui/unlocks';
+import { FeatureGuideDialog } from './ui/FeatureGuide';
 import { myDuels, reportBossDamage, reportDuelScore } from './cloud/competition';
 import { duelPhase, duelScore } from './cloud/duelScore';
 import { bossJoined } from './features/status/sections';
@@ -24,6 +25,7 @@ function page<K extends string>(load: () => Promise<Record<K, ComponentType>>, n
   return lazy(() => load().then((m) => ({ default: m[name] })));
 }
 
+const GuidePage = page(() => import('./features/more/GuidePage'), 'GuidePage');
 const ReportPage = page(() => import('./features/progress/ReportPage'), 'ReportPage');
 const RecordsPage = page(() => import('./features/progress/RecordsPage'), 'RecordsPage');
 const TimelinePage = page(() => import('./features/progress/TimelinePage'), 'TimelinePage');
@@ -138,8 +140,10 @@ function CompetitionSync({ ledger }: { ledger: Ledger }) {
       .catch(() => undefined);
   };
 
+  const testHunter = useApp((s) => !!s.player?.test);
   useEffect(() => {
-    if (!cloudEnabled || !user) return;
+    // Test hunters never publish stats, boss damage or duel scores.
+    if (!cloudEnabled || !user || testHunter) return;
     const t = setTimeout(() => {
       const stats = share
         ? {
@@ -152,6 +156,7 @@ function CompetitionSync({ ledger }: { ledger: Ledger }) {
             day: today,
             recentEp: ledger.recentEp,
             kept: ledger.recentKept.map((k) => (k ? '1' : '0')).join(''),
+            since: Object.keys(ledger.days).sort()[0] ?? today,
           }
         : null;
       once('stats', stats, () => publishStats(user.id, stats));
@@ -171,7 +176,7 @@ function CompetitionSync({ ledger }: { ledger: Ledger }) {
         .catch(() => undefined);
     }, 3000);
     return () => clearTimeout(t);
-  }, [share, user, ledger, logs, templates, today]);
+  }, [share, user, ledger, logs, templates, today, testHunter]);
   return null;
 }
 
@@ -190,6 +195,7 @@ function Shell() {
       <div className="glow-bg" />
       <DailyNotice ledger={ledger} />
       <CompetitionSync ledger={ledger} />
+      <FeatureGuideDialog />
       <Header ledger={ledger} />
       <main className="scroll-area">
         <ScrollToTop />
@@ -216,6 +222,7 @@ function Shell() {
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/calibrate" element={<CalibratePage />} />
             <Route path="/report" element={<ReportPage />} />
+          <Route path="/guide" element={<GuidePage />} />
             <Route path="/records" element={<RecordsPage />} />
             <Route path="/timeline" element={<TimelinePage />} />
             <Route path="/guild/:id" element={<GuildPage />} />

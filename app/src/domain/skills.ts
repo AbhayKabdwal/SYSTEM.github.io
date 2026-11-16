@@ -7,12 +7,19 @@ export interface SkillState {
   unlocked: Record<string, boolean>;
 }
 
-/** "Tuck Planche" -> "tuck_planche": stage sets store the node label, nodes are keyed by id. */
-const slug = (s: string) =>
-  s
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '');
+const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * Stage sets store the stage's label ("Wall Handstand"). Resolve it inside the
+ * exercise's own tree, so labels shared between trees ("Advanced Tuck" exists in
+ * both Planche and Front Lever) credit the right one. An id is accepted too, for
+ * older logs that stored those.
+ */
+function nodeFor(tree: SkillTree, value: unknown): SkillNode | undefined {
+  const v = norm(String(value ?? ''));
+  if (!v) return undefined;
+  return tree.nodes.find((n) => norm(n.label) === v || norm(n.id) === v);
+}
 
 export function getSkillState(logs: Logs, templates: Template[], trees: SkillTree[] = SKILL_TREES): SkillState {
   const best: Record<string, number> = {};
@@ -20,10 +27,11 @@ export function getSkillState(logs: Logs, templates: Template[], trees: SkillTre
     const tpl = templates.find((t) => t.id === log.templateId);
     for (const ex of tpl?.exercises ?? []) {
       if (ex.unit !== 'stage') continue;
+      const tree = treeForExercise(ex, trees);
       for (const set of log.exLogs?.[ex.id]?.sets ?? []) {
-        const key = slug(String(set.v ?? ''));
-        if (!key) continue;
-        best[key] = Math.max(best[key] ?? 0, Number(set.seconds ?? 0));
+        const node = nodeFor(tree, set.v);
+        if (!node) continue;
+        best[node.id] = Math.max(best[node.id] ?? 0, Number(set.seconds ?? 0) || 0);
       }
     }
   }

@@ -10,6 +10,7 @@ import { isNative } from '../../native/platform';
 import { RemindersCard } from './RemindersCard';
 
 const ITEMS = [
+  { to: '/guide', icon: '?', title: 'Guide', sub: 'Every feature explained, and what unlocks next' },
   { to: '/plan', icon: '◇', title: 'Plan', sub: 'This week and upcoming gates' },
   { to: '/training', icon: '⊞', title: 'Training', sub: 'Training types, exercises, quest pool' },
   { to: '/archives', icon: '≡', title: 'Archives', sub: 'Every logged day' },

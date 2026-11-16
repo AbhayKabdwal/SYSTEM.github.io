@@ -21,7 +21,7 @@ create extension if not exists pgtap with schema extensions;
 select set_config('search_path', 'public, extensions, ' || quote_ident(n.nspname), true)
 from pg_extension e join pg_namespace n on n.oid = e.extnamespace
 where e.extname = 'pgtap';
-select plan(41);
+select plan(43);
 
 -- Three users via the sign-up trigger.
 insert into auth.users (id, email, raw_user_meta_data) values
@@ -89,7 +89,7 @@ values ('00000000-0000-0000-0000-00000000000c', 'proof', 'proof feat', 'follower
 select throws_ok(
   $$ update public.profiles set stats = '{"level": 5, "rank": "Z", "streak": 1, "weekExp": 10, "week": "2026-11-02"}' where id = '00000000-0000-0000-0000-00000000000c' $$,
   null, 'stats must be well-formed');
-update public.profiles set stats = '{"level": 5, "rank": "E", "streak": 3, "weekExp": 420, "week": "2026-11-02"}' where id = '00000000-0000-0000-0000-00000000000c';
+update public.profiles set stats = '{"level": 5, "rank": "E", "streak": 3, "weekExp": 420, "week": "2026-11-02", "since": "2025-01-01"}' where id = '00000000-0000-0000-0000-00000000000c';
 
 insert into storage.objects (bucket_id, name, owner)
 values ('vault-media', '00000000-0000-0000-0000-00000000000c/p1.bin', '00000000-0000-0000-0000-00000000000c');
@@ -151,6 +151,15 @@ select set_config('role', 'postgres', true);
 update public.profiles set league = 2 where handle = 'alice';
 select public.roll_leagues();
 select is((select league::int from public.profiles where handle = 'alice'), 1, 'inactive hunters drop a league');
+
+-- Stats plausibility: impossible numbers for the history are refused.
+select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');
+select throws_ok(
+  $$ update public.profiles set stats = jsonb_build_object('level', 100, 'rank', 'S', 'streak', 3, 'weekExp', 10, 'weekEp', 50, 'week', '2026-11-02', 'since', (current_date - 7)::text) where id = '00000000-0000-0000-0000-00000000000c' $$,
+  null, 'level 100 a week after starting is refused');
+select lives_ok(
+  $$ update public.profiles set stats = jsonb_build_object('level', 12, 'rank', 'D', 'streak', 20, 'weekExp', 900, 'weekEp', 400, 'week', '2026-11-02', 'since', (current_date - 40)::text) where id = '00000000-0000-0000-0000-00000000000c' $$,
+  'realistic stats are accepted');
 
 -- Name moderation: offensive or staff-like names are refused, ordinary ones pass.
 select pg_temp.act_as('00000000-0000-0000-0000-00000000000c');

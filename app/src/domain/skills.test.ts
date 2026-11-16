@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { getSkillState, stageOptions, treeForExercise } from './skills';
+import { SKILL_TREES } from './defaults';
 import type { Logs, Template } from './types';
 
 const tpl: Template = {
@@ -45,3 +46,31 @@ describe('stage options', () => {
     expect(opts[1]!.locked).toBe(true);
   });
 });
+
+describe('every tree can progress', () => {
+  const tpls: Template[] = [
+    {
+      id: 'tpl_skills',
+      name: 'SKILLS',
+      color: '#fff',
+      exercises: SKILL_TREES.map((t) => ({ id: `e_${t.id}`, name: { planche: 'Planche Progression', front_lever: 'Front Lever Progression', muscle_up: 'Muscle-up Progression', handstand: 'Handstand / HSPU Progression', pistol: 'Pistol Progression', lsit: 'L-Sit / V-Sit Progression' }[t.id]!, unit: 'stage' })),
+    },
+  ];
+
+  it('unlocks each stage of each tree when its target is met, by label', () => {
+    for (const tree of SKILL_TREES) {
+      const sets = tree.nodes.map((n) => ({ v: n.label, seconds: n.req }));
+      const logs: Logs = { '2026-11-01': { templateId: 'tpl_skills', exLogs: { [`e_${tree.id}`]: { sets } } } };
+      const s = getSkillState(logs, tpls);
+      for (const n of tree.nodes) expect(s.unlocked[n.id], `${tree.name}: ${n.label}`).toBe(true);
+    }
+  });
+
+  it('credits shared labels to the right tree', () => {
+    const logs: Logs = { '2026-11-01': { templateId: 'tpl_skills', exLogs: { e_front_lever: { sets: [{ v: 'Advanced Tuck', seconds: 25 }] } } } };
+    const s = getSkillState(logs, tpls);
+    expect(s.best.adv_tuck_lever).toBe(25);
+    expect(s.best.advanced_tuck).toBeUndefined();
+  });
+});
+

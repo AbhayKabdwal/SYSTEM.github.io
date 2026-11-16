@@ -1,20 +1,9 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import {
-  bodyFatigue,
-  EXP,
-  flameFor,
-  getMonthly,
-  isComplete,
-  isUnlocked,
-  muscleFatigue,
-  recoveryAdvice,
-  UNLOCKS,
-  type Ledger,
-} from '../../domain';
+import { Link, useLocation } from 'react-router-dom';
+import { bodyFatigue, EXP, flameFor, getMonthly, isComplete, isUnlocked, muscleFatigue, recoveryAdvice, UNLOCKS, type Ledger } from '../../domain';
 import { useApp } from '../../state/store';
 import { Bar, Card, Sec } from '../../ui/components';
-import { Collapsible } from '../../ui/Collapsible';
+import { Collapsible, OpenSection } from '../../ui/Collapsible';
 import { useLedger, useQuestFor, useToday } from '../../ui/hooks';
 import { fatigueColor } from '../body/BodyMap';
 import { AvatarPicker } from './AvatarPicker';
@@ -47,84 +36,96 @@ export function StatusPage() {
   const muscles = useMemo(() => muscleFatigue(logs, templates, new Date(), ledger.tier), [logs, templates, ledger.tier, today]); // eslint-disable-line react-hooks/exhaustive-deps
   const body = bodyFatigue(muscles);
   const monthly = getMonthly(logs, today);
+  const openSection = (useLocation().state as { open?: string } | null)?.open ?? null;
 
   return (
-    <div className="page">
-      {!player?.prefs && (
-        <Card className="calib-card">
-          <Sec>SYSTEM CALIBRATION REQUIRED</Sec>
-          <p className="prose">Answer six questions and the System will build quests for your goals, equipment and level, getting harder as you rank up.</p>
-          <Link className="btn btn-gold" to="/calibrate" style={{ marginTop: 10 }}>
-            CALIBRATE NOW
+    <OpenSection.Provider value={openSection}>
+      <div className="page">
+        {!player?.prefs && (
+          <Card className="calib-card">
+            <Sec>SYSTEM CALIBRATION REQUIRED</Sec>
+            <p className="prose">Answer six questions and the System will build quests for your goals, equipment and level, getting harder as you rank up.</p>
+            <Link className="btn btn-gold" to="/calibrate" style={{ marginTop: 10 }}>
+              CALIBRATE NOW
+            </Link>
+          </Card>
+        )}
+
+        {player?.test && (
+        <div className="sample-banner">
+          TEST HUNTER · sync and sharing are paused
+          <Link to="/vault" className="link-btn">
+            restore my hunter
           </Link>
-        </Card>
+        </div>
       )}
 
       <StatusWindow ledger={ledger} name={player?.name ?? ''} />
 
-      {ledger.penaltyToday && <PenaltyCard ledger={ledger} today={today} />}
+        {ledger.penaltyToday && <PenaltyCard ledger={ledger} today={today} />}
 
-      <TodayCard ledger={ledger} today={today} />
+        <TodayCard ledger={ledger} today={today} />
 
-      <StreakCard ledger={ledger} today={today} />
+        <StreakCard ledger={ledger} today={today} />
 
-      {player?.prefs && <SideQuestCards ledger={ledger} today={today} />}
+        {player?.prefs && <SideQuestCards ledger={ledger} today={today} />}
 
-      {isUnlocked('stats', level) && <StatsCard ledger={ledger} body={body} />}
+        {isUnlocked('stats', level) && <StatsCard ledger={ledger} body={body} />}
 
-      {isUnlocked('reports', level) && <ReportCard ledger={ledger} today={today} />}
+        {isUnlocked('reports', level) && <ReportCard ledger={ledger} today={today} />}
 
-      {isUnlocked('items', level) && <InventoryCard ledger={ledger} today={today} />}
+        {isUnlocked('items', level) && <InventoryCard ledger={ledger} today={today} />}
 
-      {isUnlocked('shadows', level) && <ArmyCard ledger={ledger} />}
+        {isUnlocked('shadows', level) && <ArmyCard ledger={ledger} />}
 
-      {isUnlocked('boss', level) && <BossCard ledger={ledger} today={today} />}
+        {isUnlocked('boss', level) && <BossCard ledger={ledger} today={today} />}
 
-      {isUnlocked('body', level) && (
-        <Collapsible id="condition" title="CONDITION" icon="⚇" summary={`Body load ${body}%`}>
-          <div className="row" style={{ marginBottom: 6 }}>
-            <span className="prose">Body load</span>
-            <span style={{ fontFamily: 'var(--hd)', color: fatigueColor(Math.max(body, 30)) }}>{body}%</span>
-          </div>
-          <Bar pct={body} color={fatigueColor(Math.max(body, 30))} />
-          <p className="prose" style={{ marginTop: 12 }}>
-            {recoveryAdvice(muscles)}
-          </p>
-          <Link className="btn btn-sm" to="/body" style={{ marginTop: 10 }}>
-            OPEN MUSCLE MAP
-          </Link>
-        </Collapsible>
-      )}
-
-      <SystemLog ledger={ledger} />
-
-      {isUnlocked('skills', level) && <SkillTreeCard />}
-
-      <Collapsible id="monthly" title="30-DAY CHALLENGE" icon="◇" summary={`${monthly.done}/${monthly.target}`}>
-        <div className="row">
-          <span className="prose">Clear 30 quests this month</span>
-          <span style={{ fontFamily: 'var(--hd)', fontSize: 16, color: monthly.unlocked ? 'var(--gold)' : 'var(--glow)' }}>
-            {monthly.done}/{monthly.target}
-          </span>
-        </div>
-        <div className="challenge-dots" aria-hidden>
-          {Array.from({ length: 30 }, (_, i) => (
-            <div key={i} className={`ch-dot${i < monthly.done ? ' done' : ''}`} />
-          ))}
-        </div>
-        {monthly.unlocked && (
-          <div className="label" style={{ color: 'var(--gold)', marginTop: 10 }}>
-            TITLE: MONARCH OF GRAVITY
-          </div>
+        {isUnlocked('body', level) && (
+          <Collapsible id="condition" title="CONDITION" icon="⚇" summary={`Body load ${body}%`}>
+            <div className="row" style={{ marginBottom: 6 }}>
+              <span className="prose">Body load</span>
+              <span style={{ fontFamily: 'var(--hd)', color: fatigueColor(Math.max(body, 30)) }}>{body}%</span>
+            </div>
+            <Bar pct={body} color={fatigueColor(Math.max(body, 30))} />
+            <p className="prose" style={{ marginTop: 12 }}>
+              {recoveryAdvice(muscles)}
+            </p>
+            <Link className="btn btn-sm" to="/body" style={{ marginTop: 10 }}>
+              OPEN MUSCLE MAP
+            </Link>
+          </Collapsible>
         )}
-      </Collapsible>
 
-      <LoreCard level={level} />
+        <SystemLog ledger={ledger} />
 
-      <RankLadder ledger={ledger} />
+        {isUnlocked('skills', level) && <SkillTreeCard />}
 
-      <NextUnlock level={level} />
-    </div>
+        <Collapsible id="monthly" title="30-DAY CHALLENGE" icon="◇" summary={`${monthly.done}/${monthly.target}`}>
+          <div className="row">
+            <span className="prose">Clear 30 quests this month</span>
+            <span style={{ fontFamily: 'var(--hd)', fontSize: 16, color: monthly.unlocked ? 'var(--gold)' : 'var(--glow)' }}>
+              {monthly.done}/{monthly.target}
+            </span>
+          </div>
+          <div className="challenge-dots" aria-hidden>
+            {Array.from({ length: 30 }, (_, i) => (
+              <div key={i} className={`ch-dot${i < monthly.done ? ' done' : ''}`} />
+            ))}
+          </div>
+          {monthly.unlocked && (
+            <div className="label" style={{ color: 'var(--gold)', marginTop: 10 }}>
+              TITLE: MONARCH OF GRAVITY
+            </div>
+          )}
+        </Collapsible>
+
+        <LoreCard level={level} />
+
+        <RankLadder ledger={ledger} />
+
+        <NextUnlock level={level} />
+      </div>
+    </OpenSection.Provider>
   );
 }
 
@@ -140,7 +141,9 @@ function StatusWindow({ ledger, name }: { ledger: Ledger; name: string }) {
           </div>
           <div className="xp-labels">
             <span>EXP</span>
-            <span>{ledger.levelNext ? `${(ledger.exp - ledger.levelStart).toLocaleString()} / ${(ledger.levelNext - ledger.levelStart).toLocaleString()}` : 'MAX'}</span>
+            <span>
+              {ledger.levelNext ? `${(ledger.exp - ledger.levelStart).toLocaleString()} / ${(ledger.levelNext - ledger.levelStart).toLocaleString()}` : 'MAX'}
+            </span>
           </div>
           <Bar pct={ledger.levelProg} color={ledger.rankColor} />
           {ledger.statPoints.free > 0 && isUnlocked('stats', ledger.level) && (
@@ -234,8 +237,8 @@ function NextUnlock({ level }: { level: number }) {
   const next = UNLOCKS.find((u) => u.level > level);
   if (!next) return null;
   return (
-    <p className="lock-note">
-      🔒 LEVEL {next.level}: {next.name.toUpperCase()}
-    </p>
+    <Link to="/guide" className="lock-note" style={{ display: 'block', textDecoration: 'none' }}>
+      🔒 LEVEL {next.level}: {next.name.toUpperCase()} · SEE THE GUIDE
+    </Link>
   );
 }

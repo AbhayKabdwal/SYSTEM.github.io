@@ -3,6 +3,7 @@ import { useApp } from '../../state/store';
 import { useSession } from '../../state/session';
 import { buildDemo, DEMO_PRESETS, todayStr, type DemoPreset } from '../../domain';
 import { devMode, setDevMode } from '../../ui/devMode';
+import { demoNet, setDemoNet } from '../../cloud/demoNetwork';
 import { buildBackup, BackupError } from '../../data/backup';
 import { blobToDataUrl } from '../../data/blobs';
 import { createRepo } from '../../data/repo';
@@ -184,30 +185,47 @@ export function VaultPage() {
   );
 }
 
-/** Developer mode only: replace this device's data with a generated hunter to test edge cases. */
+/** Developer mode only: test hunters (your real hunter is kept and restored) and the sample network. */
 function TestHunters() {
   const replaceAll = useApp((s) => s.replaceAll);
-  const user = useSession((s) => s.user);
+  const restoreReal = useApp((s) => s.restoreReal);
+  const isTest = useApp((s) => !!s.player?.test);
   const [busy, setBusy] = useState(false);
+  const [sample, setSample] = useState(demoNet);
   return (
     <Card className="danger-card">
-      <Sec info="Builds a realistic history and replays it through the normal rules, so levels, ranks, items and shadows are exactly what a real player with that history would see.">
-        TEST HUNTERS
+      <Sec info="Test hunters replay a generated history through the normal rules, so every number is what a real player with that history would see. Your real hunter is saved on this device first and comes back with Restore. While a test hunter is loaded, sync and all sharing are paused, so it can never reach your account or other players.">
+        DEVELOPER
       </Sec>
-      <p className="prose">Replaces everything on this device with a generated hunter.</p>
-      {user && (
-        <p className="hint" style={{ color: 'var(--gold)' }}>
-          You're signed in: sync would upload this test history to your account. Sign out first, or use a separate test account.
-        </p>
+      {isTest && (
+        <button
+          className="btn btn-grn"
+          style={{ marginBottom: 14 }}
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const had = await restoreReal();
+              toast(had ? 'YOUR HUNTER IS BACK' : 'TEST HUNTER REMOVED');
+              location.hash = '#/';
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          ↩ RESTORE MY REAL HUNTER
+        </button>
       )}
-      <div className="stack" style={{ marginTop: 12 }}>
+      <div className="label">LOAD A TEST HUNTER</div>
+      <div className="stack">
         {(Object.keys(DEMO_PRESETS) as DemoPreset[]).map((k) => (
           <button
             key={k}
             className="list-item"
+            style={{ marginBottom: 0 }}
             disabled={busy}
             onClick={async () => {
-              if (!confirm(`Replace this device's data with "${DEMO_PRESETS[k].label}"? Export a backup first if you need your real data.`)) return;
+              if (!confirm(`Load "${DEMO_PRESETS[k].label}"? Your real hunter is kept on this device and comes back with Restore.`)) return;
               setBusy(true);
               try {
                 const { player, logs } = buildDemo(k, todayStr());
@@ -225,7 +243,31 @@ function TestHunters() {
           </button>
         ))}
       </div>
-      <button className="quiet-link" onClick={() => (setDevMode(false), (location.hash = '#/more'))}>
+      <label className="check" style={{ marginTop: 16 }}>
+        <input
+          type="checkbox"
+          checked={sample}
+          onChange={(e) => {
+            setDemoNet(e.target.checked);
+            setSample(e.target.checked);
+            toast(e.target.checked ? 'SAMPLE NETWORK ON · OPEN HUNTERS' : 'SAMPLE NETWORK OFF');
+          }}
+        />
+        <span>
+          <span className="list-title">Sample network</span>
+          <span className="hint" style={{ display: 'block', marginTop: 2 }}>
+            Fills Hunters with made-up hunters, posts, a guild, a league and duels to try the screens. Nothing is sent to the server.
+          </span>
+        </span>
+      </label>
+      <button
+        className="quiet-link"
+        onClick={() => {
+          setDevMode(false);
+          setDemoNet(false);
+          location.hash = '#/more';
+        }}
+      >
         Turn off developer mode
       </button>
     </Card>

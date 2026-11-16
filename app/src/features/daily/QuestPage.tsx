@@ -84,11 +84,16 @@ export function QuestPage() {
   const user = useSession((s) => s.user);
   const today = useToday();
   const ledger = useLedger();
-  const navState = useLocation().state as { date?: string; focus?: SideQuestKind } | null;
+  const navState = useLocation().state as { date?: string; focus?: SideQuestKind; template?: string } | null;
   const requested = navState?.date;
   const [date, setDate] = useState(() => (requested && requested <= today && requested >= addDays(today, -EDIT_WINDOW_DAYS) ? requested : today));
   const saved = logs[date];
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(saved));
+  const [draft, setDraft] = useState<Draft>(() => {
+    const d = draftFrom(saved);
+    // Arriving from "Log skill work": preselect that training type if the day has none yet.
+    if (navState?.template && !d.templateId) d.templateId = navState.template;
+    return d;
+  });
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -445,7 +450,7 @@ export function QuestPage() {
         </div>
       </Collapsible>
 
-      <Collapsible id="q-training" title="TRAINING" icon="⚔" summary={tpl ? tpl.name : 'Optional'}>
+      <Collapsible id="q-training" title="TRAINING" icon="⚔" summary={tpl ? tpl.name : 'Optional'} forceOpen={!!navState?.template}>
         <label className="label" htmlFor="tpl-select">
           TRAINING TYPE
         </label>

@@ -1,4 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+
+/** A page can ask one section to open (and scroll into view), e.g. from a feature guide's SHOW ME. */
+export const OpenSection = createContext<string | null>(null);
 
 const KEY = 'sys:open:';
 
@@ -22,6 +25,7 @@ export function Collapsible({
   icon,
   defaultOpen = false,
   accent,
+  forceOpen,
   children,
 }: {
   id: string;
@@ -30,9 +34,18 @@ export function Collapsible({
   icon?: string;
   defaultOpen?: boolean;
   accent?: string;
+  /** Open on first render whatever was remembered (e.g. arriving from a link). */
+  forceOpen?: boolean;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(() => readOpen(id, defaultOpen));
+  const wanted = useContext(OpenSection) === id;
+  const [open, setOpen] = useState(() => forceOpen || wanted || readOpen(id, defaultOpen));
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!wanted) return;
+    setOpen(true);
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [wanted]);
   const toggle = () => {
     setOpen((o) => {
       try {
@@ -44,7 +57,7 @@ export function Collapsible({
     });
   };
   return (
-    <section className={`card collapsible${open ? ' open' : ''}`} style={accent ? { borderColor: accent } : undefined}>
+    <section ref={ref} className={`card collapsible${open ? ' open' : ''}`} style={accent ? { borderColor: accent } : undefined}>
       <button className="coll-head" onClick={toggle} aria-expanded={open}>
         {icon && (
           <span className="coll-icon" aria-hidden style={accent ? { color: accent } : undefined}>

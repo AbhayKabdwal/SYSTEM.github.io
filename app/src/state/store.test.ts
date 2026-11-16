@@ -82,4 +82,28 @@ describe('app store', () => {
     await after.getState().init();
     expect(after.getState().player).toBeNull();
   });
+
+  it('keeps the real hunter while a test hunter is loaded, and restores it', async () => {
+    const { repo, store } = fresh();
+    await store.getState().init();
+    await store.getState().setPlayer({ name: 'REAL' });
+    await store.getState().saveLog('2026-11-01', { questProgress: { pushup: 20 }, savedAt: '1' });
+    const photo = await repo.putPhoto(new Blob(['x']));
+
+    await store.getState().replaceAll({ name: 'TEST', test: true }, { '2020-01-01': { savedAt: 't' } });
+    // Loading a second test hunter must not overwrite the saved real one.
+    await store.getState().replaceAll({ name: 'TEST 2', test: true }, { '2021-01-01': { savedAt: 't' } });
+    expect(store.getState().player?.name).toBe('TEST 2');
+    expect(Object.keys(store.getState().logs)).toEqual(['2021-01-01']);
+
+    expect(await store.getState().restoreReal()).toBe(true);
+    expect(store.getState().player?.name).toBe('REAL');
+    expect(Object.keys(store.getState().logs)).toEqual(['2026-11-01']);
+    expect(await repo.getPhoto(photo)).toBeTruthy();
+
+    // And it survives a reload.
+    const again = createAppStore(repo, () => null);
+    await again.getState().init();
+    expect(again.getState().player?.name).toBe('REAL');
+  });
 });
