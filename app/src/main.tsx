@@ -11,9 +11,11 @@ import App from './App';
 import { registerSW } from 'virtual:pwa-register';
 import { isNative } from './native/platform';
 import { initNative } from './native/init';
+import { installInterfaceSounds } from './ui/sound';
 
 // Website: new versions activate on the next launch instead of being stuck behind a stale cache
 // (v1's problem). The Android app ships its files inside the APK and needs no service worker.
+installInterfaceSounds();
 if (isNative) initNative();
 else registerSW({ immediate: true });
 

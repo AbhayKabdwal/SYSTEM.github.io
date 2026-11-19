@@ -14,6 +14,8 @@ let sysTimer: ReturnType<typeof setTimeout> | undefined;
 
 export function toast(msg: string) {
   useNotify.setState({ toast: msg });
+  if (/FAIL|COULD NOT|ERROR|NOT GRANTED|BLOCKED|NOT ON THIS/i.test(msg)) play('error');
+  else if (/^SAVED|LOG SAVED|EXP|CHECKED IN|PROFILE (SAVED|PHOTO)/i.test(msg)) play('success');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => useNotify.setState({ toast: null }), 2800);
 }

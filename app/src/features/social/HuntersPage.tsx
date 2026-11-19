@@ -282,7 +282,7 @@ function FeatCard({ feat, me, onChange }: { feat: Feat; me: string; onChange: (p
       {feat.body && <div className="feat-body">{feat.body}</div>}
       {feat.imageUrl && <img className="feat-img" src={feat.imageUrl} alt={`Photo from @${feat.author.handle}`} loading="lazy" />}
       <div className="feat-actions">
-        <button className={`like-btn${feat.likedByMe ? ' on' : ''}`} aria-pressed={feat.likedByMe} onClick={toggleLike}>
+        <button className={`like-btn${feat.likedByMe ? ' on' : ''}`} data-sound={feat.likedByMe ? 'tap' : 'pop'} aria-pressed={feat.likedByMe} onClick={toggleLike}>
           {feat.likedByMe ? '♥' : '♡'} {feat.likeCount}
         </button>
         {mine && <span className="tag">{feat.visibility === 'public' ? 'GLOBAL' : 'FOLLOWERS'}</span>}

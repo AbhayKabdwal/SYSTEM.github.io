@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { devMode, setDevMode } from '../../ui/devMode';
 import { toast } from '../../ui/notify';
-import { play, setSoundOn, soundOn } from '../../ui/sound';
+import { play, setSoundOn, setUiSoundOn, soundOn, uiSoundOn } from '../../ui/sound';
 import { cloudEnabled } from '../../cloud/client';
 import { useSession } from '../../state/session';
 import { Card } from '../../ui/components';
@@ -74,9 +74,10 @@ function VersionTapper() {
 
 function SoundToggle() {
   const [on, setOn] = useState(soundOn);
+  const [ui, setUi] = useState(uiSoundOn);
   return (
     <Card>
-      <label className="check">
+      <label className="check" data-sound="none">
         <input
           type="checkbox"
           checked={on}
@@ -89,10 +90,29 @@ function SoundToggle() {
         <span>
           <span className="list-title">Sound effects</span>
           <span className="hint" style={{ display: 'block', marginTop: 2 }}>
-            A short System chime with notifications, level-ups and rank-ups.
+            System chimes for level-ups, rank-ups, records and warnings.
           </span>
         </span>
       </label>
+      {on && (
+        <label className="check" style={{ marginTop: 14 }} data-sound="none">
+          <input
+            type="checkbox"
+            checked={ui}
+            onChange={(e) => {
+              setUiSoundOn(e.target.checked);
+              setUi(e.target.checked);
+              if (e.target.checked) play('tab');
+            }}
+          />
+          <span>
+            <span className="list-title">Interface sounds</span>
+            <span className="hint" style={{ display: 'block', marginTop: 2 }}>
+              Soft clicks for buttons, tabs and rows, and a ping when a quest task is done.
+            </span>
+          </span>
+        </label>
+      )}
     </Card>
   );
 }

@@ -37,6 +37,8 @@ import { Card, Sec, Seg } from '../../ui/components';
 import { Collapsible } from '../../ui/Collapsible';
 import { compressImage } from '../../ui/image';
 import { choosePhoto } from '../../native/photo';
+import { hapticTap } from '../../native/haptics';
+import { play } from '../../ui/sound';
 import { isNative } from '../../native/platform';
 import { connectHealth, healthStatus, healthValueFor, readHealthDay } from '../../native/health';
 import { systemAlert, toast } from '../../ui/notify';
@@ -491,7 +493,7 @@ export function QuestPage() {
       )}
 
       <div style={{ position: 'sticky', bottom: 8, zIndex: 2 }}>
-        <button className="btn btn-grn" style={{ background: 'var(--bg)' }} disabled={saving || (!dirty && !!saved)} onClick={save}>
+        <button className="btn btn-grn" data-sound="none" style={{ background: 'var(--bg)' }} disabled={saving || (!dirty && !!saved)} onClick={save}>
           {saving ? 'SAVING…' : dirty || !saved ? '◆ SAVE LOG ◆' : '✓ SAVED'}
         </button>
       </div>
@@ -611,6 +613,14 @@ function PhotoSlot({ id, label, onPick, onRemove }: { id: string | null; label: 
 
 function TaskRow({ task, value, onChange }: { task: Quest['tasks'][number]; value: string | number | undefined; onChange: (v: string | number) => void }) {
   const val = Number(value ?? 0);
+  // Reaching a target gets its own little reward; MAX on a finished task stays quiet.
+  const set = (v: string | number) => {
+    if (Number(v) >= task.target && val < task.target) {
+      play('tick');
+      hapticTap();
+    } else if (v === task.target) play('tap');
+    onChange(v);
+  };
   const pct = Math.min((val / task.target) * 100, 100);
   return (
     <div className={`quest-row${val >= task.target ? ' done' : ''}`}>
@@ -629,9 +639,9 @@ function TaskRow({ task, value, onChange }: { task: Quest['tasks'][number]; valu
         aria-label={`${task.label} done`}
         placeholder="0"
         value={value ?? ''}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => set(e.target.value)}
       />
-      <button className="btn btn-sm" aria-label={`Mark ${task.label} complete`} onClick={() => onChange(task.target)}>
+      <button className="btn btn-sm" data-sound="none" aria-label={`Mark ${task.label} complete`} onClick={() => set(task.target)}>
         MAX
       </button>
       <div className="quest-target">
